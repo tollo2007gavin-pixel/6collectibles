@@ -1,0 +1,6 @@
+.env
+out/
+cards/
+state/
+uploads/
+__pycache__/
