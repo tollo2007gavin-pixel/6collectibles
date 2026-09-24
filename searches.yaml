@@ -1,0 +1,32 @@
+# eBay search config. Each run only processes listings not seen before.
+marketplace: EBAY_US
+state_ttl_days: 30          # forget processed listings after this long
+download_workers: 8
+# pipeline: centering:grade # module:function; omit to just save images + manifest
+
+quality:
+  min_short_side: 700       # px; eBay's s-l1600 photos are usually 1200-1600 on the long side
+  min_sharpness: 60         # Laplacian variance at 1000px; tune from the "quality" field in results.jsonl
+
+searches:
+  - name: charizard_raw
+    q: "charizard"
+    category_ids: 183454           # CCG Individual Cards
+    # aspect_filter: "categoryId:183454,Game:{Pokémon TCG}"   # verify aspect name/value in eBay's taxonomy
+    condition_ids: [4000]          # 4000 = Ungraded in trading-card categories (2750 = Graded)
+    min_price: 20
+    max_price: 500
+    buying_options: [FIXED_PRICE, AUCTION]
+    item_location_country: US
+    exclude_keywords: [psa, bgs, cgc, sgc, proxy, custom, orica, lot, bundle, "you pick", "choose", "digital", "code card", "jumbo"]
+    max_pages: 3                   # 200 listings/page; early-stops once it reaches already-seen listings
+
+  - name: modern_alt_arts
+    q: "pokemon alt art"
+    category_ids: 183454
+    condition_ids: [4000]
+    min_price: 40
+    buying_options: [FIXED_PRICE]
+    item_location_country: US
+    exclude_keywords: [psa, bgs, cgc, sgc, proxy, custom, lot, "you pick", "choose"]
+    max_pages: 2
