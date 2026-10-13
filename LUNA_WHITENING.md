@@ -8,7 +8,7 @@ Your review matched 17 of 19 definite predictions (89.5%): all 11 whitening card
 ## Setup
 Install requirements.txt and configure OPENAI_API_KEY and the eBay credentials described in SETUP.md in a local .env. Never commit that file. The optional requirements-audit.lock records the Windows environment used during testing.
 
-Calibration images and human labels are intentionally local and are not included in this upload. Copy luna_references.example.json to luna_references.json, then supply your 16 explicitly confirmed examples (eight clean, eight not clean), their real card IDs, paths, and SHA-256 file hashes. Keep the first eight clean and last eight not clean so each alternating fold stays balanced. The example IDs and hashes are placeholders, not usable grading examples. Do not infer labels from filenames. Existing local users can retain their already configured bank.
+The 16 user-confirmed calibration photos and labels are included in references/luna/ and luna_references.json with the user's explicit permission. The bank contains eight clean and eight not-clean examples; labels come from the user's explicit review, not original filenames. Each file is protected by its recorded SHA-256 hash. The example manifest is only a template for replacing the bank; the included real manifest is ready to use.
 
 Each target receives eight balanced other-card examples. SHA-256 checks prevent unnoticed changes to reference images. Relative paths resolve from the module directory; absolute local paths are also supported. Without a valid local calibration bank, Luna refuses to run.
 
@@ -39,4 +39,4 @@ The configured model is gpt-6-luna with xhigh reasoning. It makes two inspection
 python -m unittest discover -p "test_*.py"
 ```
 
-75 tests passed in the upload checkout, with no paid API calls. The yellow_border directory and card_utils (1).py were preserved from the latest remote branch. card_utils.py supplies the imports required by the root whitening pipeline. Calibration images and labels, generated reviews, listing batches, local notes, and credentials are not part of this upload.
+75 tests passed in the upload checkout, with no paid API calls. The yellow_border directory and card_utils (1).py were preserved from the latest remote branch. card_utils.py supplies the imports required by the root whitening pipeline. Generated reviews, listing batches, local notes, and credentials are not part of this upload.

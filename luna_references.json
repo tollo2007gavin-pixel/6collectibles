@@ -1,0 +1,98 @@
+[
+  {
+    "card_id": "117386886277",
+    "label": "clean",
+    "path": "references/luna/117386886277.jpg",
+    "sha256": "962fde8620bc05705f32f68a1e34e02305785281db2d81b447a063339cc4c62e"
+  },
+  {
+    "card_id": "117423430224",
+    "label": "clean",
+    "path": "references/luna/117423430224.jpg",
+    "sha256": "320e3b5e15a44c36c1765f17d1239e384f145d24e205f685260b1d30f18f3591"
+  },
+  {
+    "card_id": "117423431193",
+    "label": "clean",
+    "path": "references/luna/117423431193.jpg",
+    "sha256": "07a18d254fbde02dcb0f828400857b89ee0b60e6b88fb4721811907e07044c56"
+  },
+  {
+    "card_id": "117429618111",
+    "label": "clean",
+    "path": "references/luna/117429618111.jpg",
+    "sha256": "0e70c43233a93361f606e4689bd0bb7286401d1c95e5623daf9716c1575c34f2"
+  },
+  {
+    "card_id": "128051021032",
+    "label": "clean",
+    "path": "references/luna/128051021032.jpg",
+    "sha256": "e881dafaf4397ecf84f5d14bea00d6a13566111e1b7ec2dd5c56c34b6b7f78e8"
+  },
+  {
+    "card_id": "128095833668",
+    "label": "clean",
+    "path": "references/luna/128095833668.jpg",
+    "sha256": "3d4cd9c9d1a002561cedc88f5f4e7d05303e5b71d76218f75bc63cd6b689dbfd"
+  },
+  {
+    "card_id": "128097010775",
+    "label": "clean",
+    "path": "references/luna/128097010775.jpg",
+    "sha256": "17bd61375f04156f385d7afa34f42d09fee8188921f7e5e9b5e62bc621d45d19"
+  },
+  {
+    "card_id": "137672134108",
+    "label": "clean",
+    "path": "references/luna/137672134108.jpg",
+    "sha256": "cc6a9f59faa74aa45476a78a39e5c2c271dfb52650a2121a73cac89738451a13"
+  },
+  {
+    "card_id": "117421226885",
+    "label": "not_clean",
+    "path": "references/luna/117421226885.jpg",
+    "sha256": "4f99c4b00071e4a81f2019a2687e0752ec6e026fd38045de40e049e6ce81d1b8"
+  },
+  {
+    "card_id": "117428185886",
+    "label": "not_clean",
+    "path": "references/luna/117428185886.jpg",
+    "sha256": "9d7706a2fcd5141f30b6906149c526b2a56b4eeb16e0904a43080332f8d5b1a4"
+  },
+  {
+    "card_id": "117428488370",
+    "label": "not_clean",
+    "path": "references/luna/117428488370.jpg",
+    "sha256": "2480dc14bd708ef2ce4f9550aa0a44d9d24713f707806a9892536317f1b0bf5c"
+  },
+  {
+    "card_id": "117428732944",
+    "label": "not_clean",
+    "path": "references/luna/117428732944.jpg",
+    "sha256": "e7a63e6b63f2e33fd7d0155aafde91fda4aaf0ef6a59476ff1bba48f0d1aac17"
+  },
+  {
+    "card_id": "117429532967",
+    "label": "not_clean",
+    "path": "references/luna/117429532967.jpg",
+    "sha256": "4b8fa2f9077908318e1a5d5c7544bd19a0943e5917b63992f7f14135d0d4b74e"
+  },
+  {
+    "card_id": "117429642690",
+    "label": "not_clean",
+    "path": "references/luna/117429642690.jpg",
+    "sha256": "4b901809ba7b74ec5da41e4a797e3b1ee028fb75554e35d3c9c7c644fb4a4041"
+  },
+  {
+    "card_id": "128051021029",
+    "label": "not_clean",
+    "path": "references/luna/128051021029.jpg",
+    "sha256": "fac706671a92524708afaffb14b60de8caafe105941f8b34dd853b9c1d043388"
+  },
+  {
+    "card_id": "128095066506",
+    "label": "not_clean",
+    "path": "references/luna/128095066506.jpg",
+    "sha256": "ff2ebb0ba30b517d947e7e21a1a7726a39db8113c88e478acc299055c8589499"
+  }
+]

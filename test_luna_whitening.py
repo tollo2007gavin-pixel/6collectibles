@@ -11,6 +11,15 @@ class Tests(unittest.TestCase):
   digest=hashlib.sha256(self.im.read_bytes()).hexdigest()
   self.bank=[{'card_id':str(i),'label':'clean' if i<8 else 'not_clean','path':str(self.im),'sha256':digest} for i in range(16)]
   self.refs=l.references(self.bank,'0')
+ def test_bundled_reference_bank(self):
+  bank=json.loads((ROOT/'luna_references.json').read_text())
+  self.assertEqual(len(bank),16)
+  self.assertEqual(len({r['card_id'] for r in bank}),16)
+  for target in ['unseen']+[r['card_id'] for r in bank]:
+   refs=l.references(bank,target)
+   self.assertEqual(len(refs),8)
+   self.assertEqual(sum(r['label']=='clean' for r in refs),4)
+   self.assertNotIn(target,[r['card_id'] for r in refs])
  def run_decisions(self,ds):
   calls=[]
   def caller(body):
