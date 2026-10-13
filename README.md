@@ -28,3 +28,8 @@ EBAY_CLIENT_ID, EBAY_CLIENT_SECRET, and one of OPENAI_API_KEY / GEMINI_API_KEY /
 - Prices: PRICES in providers.py (checked 2026-09-23; re-check before budgeting).
 - `--gate`: skips the API when the OpenCV score is clearly clean/damaged. Calibrate
   `--gate-clean` / `--gate-heavy` from dry-run scores on cards you've judged by eye first.
+
+
+## Reviewed Luna whitening
+
+See [LUNA_WHITENING.md](LUNA_WHITENING.md) for the optimized Luna configuration, automatic crop checks, local calibration setup, offline tests, and the latest human-reviewed results.

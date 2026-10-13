@@ -9,8 +9,8 @@ actions/cache. Every run only pays for what's new.
 
 Cost controls, in the order they save money:
   1. Official Browse API (free tier, 5k calls/day) - no scraping, no proxies.
-  2. 200 results per call (API max) sorted newest-first, stopping as soon as a
-     page reaches listings we've already processed.
+  2. 200 results per call (API max), sorted newest-first, with a configured
+     maximum page count. Known items are skipped individually.
   3. Title keyword filtering BEFORE any image is downloaded.
   4. Image-ID dedupe: relisted cards reusing the same eBay-hosted photo are skipped.
   5. One image per listing (the primary photo), fetched at eBay's s-l1600 size.
@@ -118,6 +118,9 @@ class State:
                 self.images = data.get("images", {})
             except json.JSONDecodeError:
                 log.warning("State file corrupt; starting fresh")
+        cutoff = time.time() - self.ttl
+        self.items = {k: v for k, v in self.items.items() if v >= cutoff}
+        self.images = {k: v for k, v in self.images.items() if v >= cutoff}
 
     def seen_item(self, item_id: str) -> bool:
         return item_id in self.items
@@ -180,18 +183,16 @@ def search_listings(session, token, s: dict, state: State, marketplace: str):
         calls += 1
         r.raise_for_status()
         data = r.json()
-        hit_seen = False
 
         for it in data.get("itemSummaries", []):
             iid = it["itemId"]
             if state.seen_item(iid):
-                hit_seen = True
                 continue
             title = it.get("title", "")
             tl = title.lower()
             img = (it.get("image") or {}).get("imageUrl")
             if any(k in tl for k in exclude) or not all(k in tl for k in require) or not img:
-                state.mark(iid)  # rejected on metadata alone; never pay to look again
+                # Filters are search-specific; another search may accept this listing.
                 continue
             price = it.get("price") or it.get("currentBidPrice") or {}
             found.append(Listing(
@@ -203,9 +204,9 @@ def search_listings(session, token, s: dict, state: State, marketplace: str):
             ))
 
         nxt = data.get("next")
-        # Results are newest-first: once a page touches listings we've already
-        # processed, everything after it is older and was covered by earlier runs.
-        if not nxt or hit_seen:
+        # A known item does not prove later pages were handled (overlapping
+        # searches and transient download failures leave holes).
+        if not nxt:
             break
         url, page_params = nxt, None
 
@@ -262,7 +263,10 @@ def load_pipeline(spec: str | None):
 
 def short_id(item_id: str) -> str:
     parts = item_id.split("|")
-    return parts[1] if len(parts) > 1 else re.sub(r"\W", "_", item_id)
+    if len(parts) > 1:
+        raw = parts[1] + ('_' + parts[2] if len(parts) > 2 and parts[2] != '0' else '')
+        return re.sub(r'\W', '_', raw)
+    return re.sub(r"\W", "_", item_id)
 
 
 # ------------------------------------------------------------------------ main
@@ -342,10 +346,13 @@ def main() -> int:
                         stats["errors"] += 1
                 else:
                     path = img_dir / f"{short_id(listing.item_id)}.jpg"
-                    cv2.imwrite(str(path), img, [cv2.IMWRITE_JPEG_QUALITY, 95])
-                    rec["status"], rec["image_path"] = "saved", str(path)
-                    stats["saved"] += 1
-                    state.mark(listing.item_id, key)
+                    if cv2.imwrite(str(path), img, [cv2.IMWRITE_JPEG_QUALITY, 95]):
+                        rec["status"], rec["image_path"] = "saved", str(path)
+                        stats["saved"] += 1
+                        state.mark(listing.item_id, key)
+                    else:
+                        rec['status'], rec['error'] = 'error', 'image_write_failed'
+                        stats['errors'] += 1
 
                 results.write(json.dumps(rec, default=str) + "\n")
 

@@ -4,3 +4,20 @@ cards/
 state/
 uploads/
 __pycache__/
+
+# Local credentials and generated review/assessment artifacts
+.env.*
+!.env.example
+*.pyc
+.pytest_cache/
+graded/
+review/
+recheck/
+shortlist_review/
+prepared_inputs/
+outputs/
+labels.csv
+
+# Human calibration data stays local
+luna_references.json
+references/luna/

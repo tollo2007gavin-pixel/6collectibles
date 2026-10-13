@@ -1,0 +1,98 @@
+[
+  {
+    "card_id": "example-01",
+    "label": "clean",
+    "path": "references/luna/example-01.jpg",
+    "sha256": "REPLACE_WITH_SHA256_OF_YOUR_CONFIRMED_PHOTO"
+  },
+  {
+    "card_id": "example-02",
+    "label": "clean",
+    "path": "references/luna/example-02.jpg",
+    "sha256": "REPLACE_WITH_SHA256_OF_YOUR_CONFIRMED_PHOTO"
+  },
+  {
+    "card_id": "example-03",
+    "label": "clean",
+    "path": "references/luna/example-03.jpg",
+    "sha256": "REPLACE_WITH_SHA256_OF_YOUR_CONFIRMED_PHOTO"
+  },
+  {
+    "card_id": "example-04",
+    "label": "clean",
+    "path": "references/luna/example-04.jpg",
+    "sha256": "REPLACE_WITH_SHA256_OF_YOUR_CONFIRMED_PHOTO"
+  },
+  {
+    "card_id": "example-05",
+    "label": "clean",
+    "path": "references/luna/example-05.jpg",
+    "sha256": "REPLACE_WITH_SHA256_OF_YOUR_CONFIRMED_PHOTO"
+  },
+  {
+    "card_id": "example-06",
+    "label": "clean",
+    "path": "references/luna/example-06.jpg",
+    "sha256": "REPLACE_WITH_SHA256_OF_YOUR_CONFIRMED_PHOTO"
+  },
+  {
+    "card_id": "example-07",
+    "label": "clean",
+    "path": "references/luna/example-07.jpg",
+    "sha256": "REPLACE_WITH_SHA256_OF_YOUR_CONFIRMED_PHOTO"
+  },
+  {
+    "card_id": "example-08",
+    "label": "clean",
+    "path": "references/luna/example-08.jpg",
+    "sha256": "REPLACE_WITH_SHA256_OF_YOUR_CONFIRMED_PHOTO"
+  },
+  {
+    "card_id": "example-09",
+    "label": "not_clean",
+    "path": "references/luna/example-09.jpg",
+    "sha256": "REPLACE_WITH_SHA256_OF_YOUR_CONFIRMED_PHOTO"
+  },
+  {
+    "card_id": "example-10",
+    "label": "not_clean",
+    "path": "references/luna/example-10.jpg",
+    "sha256": "REPLACE_WITH_SHA256_OF_YOUR_CONFIRMED_PHOTO"
+  },
+  {
+    "card_id": "example-11",
+    "label": "not_clean",
+    "path": "references/luna/example-11.jpg",
+    "sha256": "REPLACE_WITH_SHA256_OF_YOUR_CONFIRMED_PHOTO"
+  },
+  {
+    "card_id": "example-12",
+    "label": "not_clean",
+    "path": "references/luna/example-12.jpg",
+    "sha256": "REPLACE_WITH_SHA256_OF_YOUR_CONFIRMED_PHOTO"
+  },
+  {
+    "card_id": "example-13",
+    "label": "not_clean",
+    "path": "references/luna/example-13.jpg",
+    "sha256": "REPLACE_WITH_SHA256_OF_YOUR_CONFIRMED_PHOTO"
+  },
+  {
+    "card_id": "example-14",
+    "label": "not_clean",
+    "path": "references/luna/example-14.jpg",
+    "sha256": "REPLACE_WITH_SHA256_OF_YOUR_CONFIRMED_PHOTO"
+  },
+  {
+    "card_id": "example-15",
+    "label": "not_clean",
+    "path": "references/luna/example-15.jpg",
+    "sha256": "REPLACE_WITH_SHA256_OF_YOUR_CONFIRMED_PHOTO"
+  },
+  {
+    "card_id": "example-16",
+    "label": "not_clean",
+    "path": "references/luna/example-16.jpg",
+    "sha256": "REPLACE_WITH_SHA256_OF_YOUR_CONFIRMED_PHOTO"
+  }
+]
