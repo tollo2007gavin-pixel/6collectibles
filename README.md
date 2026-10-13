@@ -1,5 +1,9 @@
 # Six Collectibles – listing pipeline
 
+The standalone [yellow-border centering pipeline](yellow_border/README.md)
+is available in `yellow_border/`, including its eBay batch runner, configuration,
+and offline tests. It has separate dependencies and outputs from the workflow below.
+
 ```
 ebay_fetch.py        -> pulls new listings, runs centering, writes out/results.jsonl
 organize_listings.py -> one folder per card, every photo flattened + tagged front/back
