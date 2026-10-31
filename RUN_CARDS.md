@@ -1,0 +1,164 @@
+# Run the card pipelines yourself
+
+**One entry file: `run_cards.py`.** Edit its `SETTINGS` block and press Run in VS Code,
+or use the GitHub Actions form. The same production code runs in either place.
+The runner uses the reviewed Luna pipeline and current yellow-border pipeline;
+the older OpenCV whitening scores and alternative provider experiments are not used.
+
+## Run directly on GitHub
+
+1. In this repository, open **Settings → Secrets and variables → Actions**.
+   Create repository secrets `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET`, and `OPENAI_API_KEY`.
+   Existing secrets with those exact names can be reused. Do not paste keys into code.
+2. Open **Actions → Run card pipeline → Run workflow**.
+3. Choose modes, listing limits, time window, card IDs, centering gate and API cap.
+4. When finished, open the workflow run and download **card-results-N** under Artifacts.
+   Extract the ZIP, then open the run's `review.html`. Keep its `_audit` folder beside it
+   so the testing images load. Results are retained on GitHub for 14 days.
+
+This workflow is **manual only**. Pushing changes does not search eBay or spend API money.
+GitHub must have Actions enabled; the workflow must be on the default branch to show
+the Run workflow button. Repository collaborators need permission to run workflows.
+GitHub runner minutes are separate from whitening API charges and depend on your plan.
+Runs are serialized; they do not cancel an earlier run. The workflow has a two-hour timeout.
+Select `check_only` to verify installation, settings and reference hashes without
+fetching listings or calling the API. A check-only run produces logs, not a results artifact.
+
+The Actions form overrides matching values from `run_cards.py`; other defaults come
+from that file. Workflow defaults are explicit, so update the form too if you want to
+change its default choices. GitHub runs start on fresh machines: cross-run skipping
+and local resume are intended for your computer, not automatic artifact downloading.
+
+## Run on your computer / VS Code
+
+Use Python 3.12+ and a dedicated virtual environment from the repository root:
+
+```powershell
+python -m venv .venv
+.venv\Scripts\python -m pip install -r requirements_runner.txt
+Copy-Item .env.example .env
+# Edit .env and enter your keys. Select .venv as VS Code's Python interpreter.
+.venv\Scripts\python run_cards.py --check
+.venv\Scripts\python run_cards.py
+```
+
+Copy `.env.example` only for initial setup; keep your existing `.env` if configured.
+`--check` validates files/settings/reference hashes without fetching or paid calls,
+and lists missing credential names. Centering-only does not need an OpenAI key.
+Local-photo runs do not need eBay keys. `prepare_api_only=True` does not need an OpenAI key.
+All relative file paths resolve from the repository, so Run works from other folders.
+
+## Modes and gates
+
+| Setting | Meaning |
+|---|---|
+| `pipeline="both"` | Centering first. Only complete centering passes proceed to validated back preparation and Luna. |
+| `pipeline="centering"` | Front measurements and centering gate only. No whitening API calls. |
+| `pipeline="api"` | Back whitening only. No centering analysis or centering gate; an accepted card is **not** certified centered. |
+| `output_mode="production"` | Main report/CSV/JSON list only accepted cards, with title, listing link, margins when measured, and brief whitening evidence. |
+| `output_mode="testing"` | Main report includes every analyzed listing, front overlay when available, usable original back, reasons, and whitening evidence. |
+| `centering_max_side_pct=53` | Both axes must be between 47 and 53. Setting 52.5 means 47.5–52.5. |
+| `allow_angular_variance=True` | Retain the prior overlap policy: eligible perspective scores above 0.15 up to 0.20 have a proposed ±1-point allowance. Report marks passes that depend on it. Set False for a strict point-estimate gate. |
+| `prepare_api_only=True` | Prepare/inspect back crops without paid API calls. In `both`/`api` these results remain undetermined, not accepted. |
+
+The quality gates are retained: hard exterior-background failures, unresolved axes,
+and excessive perspective cannot pass centering. Luna's ambiguous back crops,
+`needs_review`, errors and invalid responses never pass whitening. The allowance
+is an operating policy, not a statistically calibrated confidence interval.
+
+Whitening retains the reviewed model, prompt, references, and two inspections plus
+an adjudication call on disagreement. A rejected listing is never repeatedly assessed
+to get a favorable answer. This checks visible back whitening, not authenticity or a grade.
+
+## Fetching, limits and useful controls
+
+| Setting | Default | Meaning |
+|---|---:|---|
+| `max_listings` | 45 | Maximum eligible listing records analyzed, including processing errors. It is not the pass target. |
+| `max_listings_per_card` | 3 | Per active CSV query. A listing has one presumed front: its first image. |
+| `max_listing_age_hours` | None | Maximum time since eBay listing start; None = any age. This is not the time the physical card has ever been offered across relistings. |
+| `max_candidates_per_card` | 100 | Search/detail budget per query. Non-NM listings can consume candidates without consuming analysis slots. |
+| `card_ids` | [] | All active CSV rows, or selected active IDs. Example: `["22", "23"]` for Charizard and Miltank. |
+| `cards_csv` | yellow_border/data/cards.csv | Only active rows. Structured Near Mint-or-better / ungraded condition and existing Ditto/Turtwig Ultra Rare filters are preserved. |
+| `shuffle_cards`, `random_seed` | True, 53 | Repeatable query order; set seed to None for new ordering. Small batches can stop before every query. |
+| `target_passes` | 0 | Zero = full batch; 3 = stop after three accepted under the selected pipeline. Listing/API caps still apply. |
+| `max_whitening_cards` | 15 | Hard cap on paid card evaluations: at most 45 calls with the reviewed 2–3-call workflow. This is a card cap, not an exact dollar budget. |
+| `max_back_photos` | 8 | Additional photos considered. One sharpest validated back is assessed per listing. |
+| `centering_workers` | 2 | Separate processes, avoiding legacy shared-global races. Use 1 for serial debugging, 2–4 on a capable machine. API judgments remain serial. |
+| `skip_previous_listings` | False | Skip all recorded IDs under output_root, including earlier rejections/undetermineds. Turn off when retesting fixes. |
+| `run_label` | empty | Optional readable folder suffix (letters/numbers/hyphens/underscores). |
+| `open_report` | False | Open review.html after a local run. Ignored on GitHub. |
+
+Parallel front processing can finish a few prefetched fronts beyond a reached pass
+target; these may remain as audit images without completed result records. They are
+never sent to whitening after the target. Cancellation can wait for an already-running
+front fit to finish. No speedup factor is promised without benchmarking your machine.
+
+## Local-photo testing
+
+Set `source="local"` and point `local_input_dir` to a folder with one listing per subfolder:
+
+```text
+uploads/
+  example_01/
+    front.jpg
+    back.jpg
+    back_2.jpg
+    metadata.json   (optional)
+```
+
+Supported files: JPG/JPEG, PNG, WEBP. Centering requires exactly one image named
+`front` with one of those extensions. API-only can use a folder containing only backs.
+Optional metadata: `{"card_id":"22","title":"Charizard example","url":"https://www.ebay.com/itm/..."}`.
+Without metadata each folder is its own card ID. Card-ID selection and per-card limits
+apply; eBay age/condition filters do not apply to local photos.
+
+No URLs or keys are needed for local centering. Local whitening still requires an
+OpenAI key unless preparing crops only. Use this to retest saved problem images.
+
+## Outputs and resuming
+
+Each run creates a new `outputs/card_runs/TIMESTAMP_LABEL/`; nothing clears earlier batches:
+
+- `review.html`: production or testing view.
+- `accepted.csv`, `accepted.json`: accepted cards only, with margins and brief API evidence.
+- `results.csv`: all records in testing mode, including individual stage timings.
+- `summary.json`: counts, stop reason, API attempts, and estimated cost (not billing).
+- `_audit/run.json`: all decisions, effective settings, token usage and errors.
+- `_audit/Combined/`, `downloads/`, `details/`, `backs/`: evidence and diagnostics for debugging.
+
+Production mode filters the user-facing report; audit files intentionally retain all
+records and images so problems remain reproducible. Results and credentials are gitignored.
+Printed centering overlays retain the original engine's "No centering selection gate"
+label: the runner applies its selection gate afterward; review.html/CSV show that final decision.
+
+To continue a stopped run on the same computer, set `resume_run` to that run folder.
+Keep the same pipeline, gate, inputs, reference bank and output mode. You may raise
+listing/candidate limits, `max_whitening_cards` or `target_passes` and change worker count.
+Completed judgments are never repeated. An API request interrupted before its result
+was saved becomes `interrupted_review_required`; its reserved attempt remains counted.
+Runs stopped by account/API errors retain evidence and exit with an error. Fix the
+account issue before continuing. Change measurement settings in a new run, not by resuming.
+
+Any setting can also be overridden without editing the file:
+
+```powershell
+python run_cards.py --set pipeline=centering --set max_listings=10
+python run_cards.py --set pipeline=api --set prepare_api_only=true
+python run_cards.py --set source=local --set local_input_dir=uploads
+python run_cards.py --set resume_run=outputs/card_runs/YOUR_RUN_FOLDER
+```
+
+Use JSON values for booleans/lists/null in overrides. The Python SETTINGS block uses
+Python values (`True`, `False`, `None`). Do not put secrets in either form.
+
+## Offline verification
+
+```powershell
+python -m unittest test_card_runner
+python -m unittest discover -p "test_*.py"
+python run_cards.py --check
+```
+
+These tests use fake network/API responses and local generated fixtures. They do not
+start a live eBay batch or spend whitening API credits.

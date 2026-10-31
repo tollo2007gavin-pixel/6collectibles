@@ -1,0 +1,7 @@
+# One OpenCV distribution for both production pipelines (no GUI required).
+numpy>=2.0
+opencv-python-headless>=4.10
+Pillow>=10.1
+requests>=2.31
+python-dotenv>=1.0
+PyYAML>=6.0

@@ -1,5 +1,16 @@
 # Six Collectibles – listing pipeline
 
+## Start here: one configurable runner
+
+Use **[run_cards.py](run_cards.py)** for centering only, reviewed Luna whitening only,
+or centering followed by whitening. Edit the settings at the top, or use
+**Actions → Run card pipeline → Run workflow** on GitHub.
+Choose accepted-only production summaries or testing reports with images and reasons.
+See **[RUN_CARDS.md](RUN_CARDS.md)** for setup, inputs, output files, and local-photo testing.
+Install `requirements_runner.txt` for this unified runner. Secrets stay in `.env` or Actions secrets.
+
+The commands below remain available as individual/legacy tools.
+
 The standalone [yellow-border centering pipeline](yellow_border/README.md)
 is available in `yellow_border/`, including its eBay batch runner, configuration,
 and offline tests. It has separate dependencies and outputs from the workflow below.
