@@ -7,7 +7,7 @@ from card_runner import Settings, main
 
 # ===================== YOUR RUN SETTINGS =====================
 SETTINGS = Settings(
-    pipeline="both",                 # "both", "centering", or "api"
+    pipeline="centering",                 # "both", "centering", or "api"
     output_mode="testing",           # "production": accepted-only summary; "testing": every result + images
     source="ebay",                   # "ebay" or "local" (reuse photos without fetching)
     check_only=False,                # True validates setup only: no fetching or paid calls
