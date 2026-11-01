@@ -1,0 +1,2 @@
+# Preserve the imported GX release byte-for-byte for its provenance hash check.
+gx_border/gx_guarded_engine/** -text

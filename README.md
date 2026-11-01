@@ -6,6 +6,8 @@ Use **[run_cards.py](run_cards.py)** for centering only, reviewed Luna whitening
 or centering followed by whitening. Edit the settings at the top, or use
 **Actions → Run card pipeline → Run workflow** on GitHub.
 Choose accepted-only production summaries or testing reports with images and reasons.
+Select **yellow**, **gx**, or **all** approved border designs. Each card uses only
+its assigned engine; the [GX package](gx_border/README.md) preserves its own quality checks.
 See **[RUN_CARDS.md](RUN_CARDS.md)** for setup, inputs, output files, and local-photo testing.
 Install `requirements_runner.txt` for this unified runner. Secrets stay in `.env` or Actions secrets.
 

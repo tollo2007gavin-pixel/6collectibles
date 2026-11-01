@@ -1,0 +1,29 @@
+{
+  "note": "Routing approval is card-design eligibility, not a guarantee of measurement accuracy. GX list confirmed by the user; Zekrom SM138 and older GX experimental lists are excluded.",
+  "cards": [
+    {"id":"13","border_type":"yellow","name":"Snorlax","number":"TG10"},
+    {"id":"16","border_type":"yellow","name":"Deoxys","number":"GG12"},
+    {"id":"17","border_type":"yellow","name":"Pikachu","number":"TG05"},
+    {"id":"18","border_type":"yellow","name":"Gengar","number":"TG06"},
+    {"id":"19","border_type":"yellow","name":"Latias","number":"GG20"},
+    {"id":"20","border_type":"yellow","name":"Pikachu","number":"GG30"},
+    {"id":"21","border_type":"yellow","name":"Mew","number":"GG10"},
+    {"id":"22","border_type":"yellow","name":"Charizard","number":"TG03"},
+    {"id":"23","border_type":"yellow","name":"Miltank","number":"GG24"},
+    {"id":"24","border_type":"yellow","name":"Lapras","number":"GG05"},
+    {"id":"28","border_type":"yellow","name":"Turtwig","number":"GG31"},
+    {"id":"39","border_type":"yellow","name":"Ditto","number":"GG22"},
+    {"id":"40","border_type":"yellow","name":"Altaria","number":"GG19"},
+    {"id":"41","border_type":"yellow","name":"Electivire","number":"GG08"},
+    {"id":"42","border_type":"yellow","name":"Chandelure","number":"TG04"},
+    {"id":"eevee_sm233","border_type":"gx","name":"Eevee","number":"SM233"},
+    {"id":"umbreon_sm36","border_type":"gx","name":"Umbreon","number":"SM36"},
+    {"id":"eevee_sm174","border_type":"gx","name":"Eevee","number":"SM174"},
+    {"id":"greninja_sm197","border_type":"gx","name":"Greninja","number":"SM197"},
+    {"id":"espeon_sm35","border_type":"gx","name":"Espeon","number":"SM35"},
+    {"id":"pikachu_sm232","border_type":"gx","name":"Pikachu","number":"SM232"},
+    {"id":"charizard_sm195","border_type":"gx","name":"Charizard","number":"SM195"},
+    {"id":"primarina_sm39","border_type":"gx","name":"Primarina","number":"SM39"},
+    {"id":"blastoise_sm189","border_type":"gx","name":"Blastoise","number":"SM189"}
+  ]
+}

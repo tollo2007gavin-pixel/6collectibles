@@ -25,12 +25,14 @@ sys.path.insert(0, str(ROOT / "yellow_border"))
 import ebay_line_fit_test as yellow
 import luna_whitening as luna
 import providers
+import border_routing
 from yellow_batch_engine.measurement_screening import screen_axis
 
 
 @dataclass
 class Settings:
     pipeline: str = "both"
+    border_type: str = "yellow"
     output_mode: str = "testing"
     source: str = "ebay"
     check_only: bool = False
@@ -40,6 +42,7 @@ class Settings:
     max_candidates_per_card: int = 100
     card_ids: list[str] = field(default_factory=list)
     cards_csv: str = "yellow_border/data/cards.csv"
+    gx_cards_csv: str = "gx_border/data/cards.csv"
     shuffle_cards: bool = True
     random_seed: int | None = 53
     skip_previous_listings: bool = False
@@ -66,7 +69,7 @@ def path_at_root(value):
 
 def validate(s):
     for name, choices in {"pipeline": {"both", "centering", "api"},
-                          "source": {"ebay", "local"}, "output_mode": {"testing", "production"}}.items():
+                          "border_type": {"yellow", "gx", "all"}, "source": {"ebay", "local"}, "output_mode": {"testing", "production"}}.items():
         if getattr(s, name) not in choices:
             raise ValueError(f"{name} must be one of {sorted(choices)}")
     for name in ("max_listings", "max_listings_per_card", "max_candidates_per_card", "centering_workers", "max_back_photos"):
@@ -90,7 +93,7 @@ def validate(s):
             raise ValueError(f"{name} must be True or False")
     if s.random_seed is not None and type(s.random_seed) is not int:
         raise ValueError("random_seed must be an integer or None")
-    for name in ("cards_csv", "references_json", "output_root", "local_input_dir", "env_file", "run_label"):
+    for name in ("cards_csv", "gx_cards_csv", "references_json", "output_root", "local_input_dir", "env_file", "run_label"):
         if not isinstance(getattr(s, name), str):
             raise ValueError(f"{name} must be text")
     if not re.fullmatch(r"[A-Za-z0-9_-]{0,60}", s.run_label):
@@ -100,12 +103,22 @@ def validate(s):
 
 
 def selected_cards(s):
-    cards = yellow.load_cards(path_at_root(s.cards_csv))
+    cards = []
+    seen = set()
+    for family, filename in (("yellow", s.cards_csv), ("gx", s.gx_cards_csv)):
+        if s.border_type not in {family, "all"}:
+            continue
+        for row in yellow.load_cards(path_at_root(filename)):
+            entry = border_routing.approved(row["id"], family)
+            if row["id"] in seen or not border_routing.listing_eligible(row["search_query"], entry):
+                raise ValueError("Duplicate or mismatched approved card query: " + row["id"])
+            seen.add(row["id"])
+            cards.append(dict(row, border_type=family))
     if s.card_ids:
         wanted = {str(v) for v in s.card_ids}
         missing = wanted - {c["id"] for c in cards}
         if missing:
-            raise ValueError("Card IDs not active in cards.csv: " + ", ".join(sorted(missing)))
+            raise ValueError("Card IDs not active in the selected approved border lists: " + ", ".join(sorted(missing)))
         cards = [c for c in cards if c["id"] in wanted]
     if s.shuffle_cards:
         random.Random(s.random_seed).shuffle(cards)
@@ -127,7 +140,7 @@ def load_bank(filename):
 
 def centering_gate(combined, s):
     if combined.get("status") == "Fail":
-        return {"accepted": False, "status": "fail", "reason": "exterior_background_gate", "axes": {}}
+        return {"accepted": False, "status": "fail", "reason": "gx_hard_failure" if combined.get("border_type") == "gx" else "exterior_background_gate", "axes": {}}
     axes = combined.get("axes", {})
     if any(not axes.get(a, {}).get("resolved") for a in ("lr", "tb")):
         return {"accepted": False, "status": "undetermined", "reason": "centering_unresolved", "axes": {}}
@@ -145,7 +158,12 @@ def front_worker(content, metadata, audit):
     import cv2
     cv2.setNumThreads(1)  # One per PROCESS; shared legacy gates must not run in threads.
     started = time.perf_counter()
-    row = yellow.process_front(content, metadata, Path(audit))
+    border_routing.validate_route(metadata)
+    if metadata["border_type"] == "gx":
+        from gx_border.adapter import process_front
+    else:
+        process_front = yellow.process_front
+    row = process_front(content, metadata, Path(audit))
     row["timings"] = {"centering_seconds": time.perf_counter() - started}
     return row
 
@@ -193,6 +211,7 @@ def prepare_back(client, detail, row, audit, s):
 
 
 def finish_listing(row, detail, client, audit, s, bank, state, save, *, preparer=prepare_back, classifier=luna.classify):
+    border_routing.validate_route(row)
     row.update(status="undetermined", accepted=False, reason="not_finished")
     row["whitening"] = {"decision": "not_run"}
     if s.pipeline != "api":
@@ -250,6 +269,7 @@ def local_candidates(s, seen, state):
         raise ValueError(f"Local input directory not found: {base}")
     folders = [p for p in sorted(base.iterdir()) if p.is_dir()]
     counts = Counter(str(r.get("card_id")) for r in state["records"])
+    allowed = {r["id"]: r for r in selected_cards(s)}
     for folder in folders:
         itemid = "local:" + str(folder.resolve())
         if itemid in seen:
@@ -257,6 +277,14 @@ def local_candidates(s, seen, state):
         metadata_file = folder / "metadata.json"
         meta = json.loads(metadata_file.read_text(encoding="utf-8-sig")) if metadata_file.exists() else {}
         card_id = str(meta.get("card_id", folder.name))
+        entry = border_routing.approved(card_id)
+        if s.border_type not in {entry["border_type"], "all"} or (s.card_ids and card_id not in {str(v) for v in s.card_ids}):
+            continue
+        if card_id not in allowed:
+            raise ValueError(f"{folder}: metadata.card_id must belong to the selected active approved border list")
+        family = allowed[card_id]["border_type"]
+        if meta.get("border_type", family) != family:
+            raise ValueError(f"{folder}: border_type conflicts with its approved card_id")
         if s.card_ids and card_id not in {str(v) for v in s.card_ids}:
             continue
         if counts[card_id] >= s.max_listings_per_card:
@@ -268,7 +296,7 @@ def local_candidates(s, seen, state):
         front = fronts[0] if fronts else None
         seen.add(itemid)
         counts[card_id] += 1
-        yield ({"item_id": itemid, "card_id": card_id, "title": meta.get("title", folder.name), "url": meta.get("url", ""),
+        yield ({"item_id": itemid, "card_id": card_id, "border_type": family, "title": meta.get("title", folder.name), "url": meta.get("url", ""),
                 "image_url": str(front) if front else "", "query": "local"},
                {"additionalImages": [{"imageUrl": str(p)} for p in photos if p != front]})
 
@@ -276,12 +304,13 @@ def local_candidates(s, seen, state):
 def ebay_candidates(s, client, cards, seen, state):
     counts = Counter(str(r.get("card_id")) for r in state["records"])
     for card in cards:
+        entry = border_routing.validate_route(dict(card_id=card["id"], border_type=card.get("border_type")))
         if counts[card["id"]] >= s.max_listings_per_card:
             continue
         for offset in range(0, s.max_candidates_per_card, 200):
             limit = min(200, s.max_candidates_per_card - offset)
             page = client.search(card["search_query"], offset=offset, limit=limit,
-                                 age_hours=s.max_listing_age_hours, card_id=card["id"])
+                                 age_hours=s.max_listing_age_hours, card_id=card["id"] if card["border_type"] == "yellow" else None)
             for summary in page.get("itemSummaries", []):
                 if counts[card["id"]] >= s.max_listings_per_card:
                     break
@@ -294,12 +323,15 @@ def ebay_candidates(s, client, cards, seen, state):
                     if not yellow.is_near_mint_ungraded(detail):
                         state["fetch_counts"]["not_near_mint_ungraded"] += 1
                         continue
+                    if not border_routing.listing_eligible(detail.get("title", ""), entry):
+                        state["fetch_counts"]["identity_not_approved"] = state["fetch_counts"].get("identity_not_approved", 0) + 1
+                        continue
                     image = (detail.get("image") or {}).get("imageUrl") or (summary.get("image") or {}).get("imageUrl")
                     if not image:
                         state["fetch_counts"]["missing_front_image"] += 1
                         continue
                     counts[card["id"]] += 1
-                    yield ({"item_id": itemid, "card_id": card["id"], "query": card["search_query"],
+                    yield ({"item_id": itemid, "card_id": card["id"], "border_type": card["border_type"], "query": card["search_query"],
                             "title": detail.get("title", card["search_query"]), "url": detail.get("itemWebUrl", ""), "image_url": image}, detail)
                 except Exception as error:
                     state["errors"].append({"item_id": itemid, "stage": "listing_details", "error": providers.redact_error(error)})
@@ -317,7 +349,7 @@ def report_row(row):
     stages = whitening.get("stages", [])
     evidence = stages[-1].get("evidence", "") if stages else whitening.get("reason", "")
     gate_axes = row.get("centering_gate", {}).get("axes", {})
-    return {"title": row["title"], "url": row.get("url", ""), "item_id": row["item_id"], "status": row["status"],
+    return {"title": row["title"], "url": row.get("url", ""), "item_id": row["item_id"], "border_type": row.get("border_type", "unknown"), "status": row["status"],
             "reason": row["reason"], "left_pct": lr, "right_pct": None if lr is None else 100 - lr,
             "top_pct": tb, "bottom_pct": None if tb is None else 100 - tb,
             "angular_allowance_pp": max((v.get("uncertainty_pp") or 0 for v in gate_axes.values()), default=0),
@@ -328,7 +360,7 @@ def report_row(row):
 
 
 def write_csv(path, rows):
-    fields = ["title", "url", "item_id", "status", "reason", "left_pct", "right_pct", "top_pct", "bottom_pct",
+    fields = ["title", "url", "item_id", "border_type", "status", "reason", "left_pct", "right_pct", "top_pct", "bottom_pct",
               "angular_allowance_pp", "depends_on_allowance", "whitening", "evidence", "estimated_api_cost_usd",
               "download_seconds", "centering_seconds", "back_preparation_seconds", "whitening_seconds"]
     with path.open("w", encoding="utf-8-sig", newline="") as handle:
@@ -349,6 +381,7 @@ def checkpoint(out, state, s):
     accepted = [r for r in state["records"] if r.get("accepted")]
     shown = state["records"] if s.output_mode == "testing" else accepted
     summary = {"state": state["state"], "pipeline": s.pipeline, "output_mode": s.output_mode,
+               "border_type": s.border_type, "border_counts": dict(Counter(r.get("border_type", "unknown") for r in state["records"])),
                "processed": len(state["records"]), "accepted": len(accepted),
                "outcomes": dict(Counter(r["status"] for r in state["records"])),
                "whitening_attempts": state["whitening_attempts"],
@@ -384,7 +417,7 @@ def checkpoint(out, state, s):
             for path, label in paths:
                 relative = path.relative_to(out).as_posix()
                 images += f'<a href="{html.escape(relative, quote=True)}"><img loading="lazy" src="{html.escape(relative, quote=True)}" alt="{label}"></a>'
-        sections.append(f'<article><h2>{heading}</h2><p><b>{r["status"].upper()}</b> · {html.escape(r["reason"])}</p>'
+        sections.append(f'<article><h2>{heading}</h2><p><b>{r["status"].upper()}</b> · {html.escape(r["border_type"].upper())} · {html.escape(r["reason"])}</p>'
                         f'<p>{" · ".join(margins)}{allowance} · Whitening: {html.escape(r["whitening"])}</p>'
                         f'<p>{html.escape(r["evidence"])}</p>{images}</article>')
     intro = f'{summary["processed"]} processed · {summary["accepted"]} accepted · {html.escape(state["state"])}'
@@ -402,7 +435,8 @@ def identity_settings(s):
 
 
 def new_state(s):
-    return {"version": 1, "started_utc": datetime.now(timezone.utc).isoformat(), "state": "running",
+    return {"version": 2, "started_utc": datetime.now(timezone.utc).isoformat(), "state": "running",
+            "approved_catalog_sha256": hashlib.sha256(border_routing.CATALOG_PATH.read_bytes()).hexdigest(),
             "settings": asdict(s), "records": [], "errors": [], "whitening_attempts": 0,
             "fetch_counts": {"not_near_mint_ungraded": 0, "missing_front_image": 0}}
 
@@ -417,13 +451,14 @@ def previous_ids(root):
 
 def run(s, *, client_factory=None, processor=front_worker, preparer=prepare_back, classifier=luna.classify):
     validate(s)
-    cards = selected_cards(s) if s.source == "ebay" else []
+    cards = selected_cards(s)
     bank = load_bank(s.references_json) if s.pipeline != "centering" and not s.prepare_api_only else None
     root = path_at_root(s.output_root)
     if s.resume_run:
         out = path_at_root(s.resume_run)
         state = json.loads((out / "_audit/run.json").read_text(encoding="utf-8-sig"))
-        if state.get("version") != 1 or identity_settings(Settings(**state["settings"])) != identity_settings(s):
+        if (state.get("version") != 2 or identity_settings(Settings(**state["settings"])) != identity_settings(s)
+                or state.get("approved_catalog_sha256") != hashlib.sha256(border_routing.CATALOG_PATH.read_bytes()).hexdigest()):
             raise ValueError("Resume settings differ. Start a new run to change pipeline, gates, inputs or output mode.")
         for row in state["records"]:
             if row.get("reason") in {"api_in_flight", "not_finished"}:
@@ -547,9 +582,8 @@ def main(settings, argv=None):
             inputs = json.loads(os.environ["CARD_RUN_INPUTS"])
             settings = apply_overrides(settings, [f"{k}={v if isinstance(v, str) else json.dumps(v)}" for k, v in inputs.items() if v != ""])
         validate(settings)
-        if settings.source == "ebay":
-            selected_cards(settings)
-        elif not path_at_root(settings.local_input_dir).is_dir():
+        selected_cards(settings)
+        if settings.source == "local" and not path_at_root(settings.local_input_dir).is_dir():
             raise ValueError("local_input_dir does not exist")
         if settings.pipeline != "centering" and not settings.prepare_api_only:
             load_bank(settings.references_json)

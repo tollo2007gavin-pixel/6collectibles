@@ -8,6 +8,7 @@ from card_runner import Settings, main
 # ===================== YOUR RUN SETTINGS =====================
 SETTINGS = Settings(
     pipeline="centering",                 # "both", "centering", or "api"
+    border_type="yellow",            # "yellow", "gx", or "all" approved card designs
     output_mode="testing",           # "production": accepted-only summary; "testing": every result + images
     source="ebay",                   # "ebay" or "local" (reuse photos without fetching)
     check_only=False,                # True validates setup only: no fetching or paid calls
@@ -18,6 +19,7 @@ SETTINGS = Settings(
     max_candidates_per_card=100,     # Search/detail budget, including unsuitable listings
     card_ids=[],                     # [] = all active CSV rows; e.g. ["22", "23"]
     cards_csv="yellow_border/data/cards.csv",
+    gx_cards_csv="gx_border/data/cards.csv", # Separate approved GX queries; never sent to yellow
     shuffle_cards=True,
     random_seed=53,                   # None = fresh order each run
     skip_previous_listings=False,    # True skips IDs in earlier runs under output_root

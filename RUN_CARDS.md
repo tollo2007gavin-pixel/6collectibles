@@ -4,6 +4,9 @@
 or use the GitHub Actions form. The same production code runs in either place.
 The runner uses the reviewed Luna pipeline and current yellow-border pipeline;
 the older OpenCV whitening scores and alternative provider experiments are not used.
+It also includes the [guarded GX pipeline](gx_border/README.md). Choose
+`border_type="yellow"`, `"gx"`, or `"all"`. `all` selects both approved catalogs;
+it never applies both fitters to the same card.
 
 ## Run directly on GitHub
 
@@ -52,13 +55,16 @@ All relative file paths resolve from the repository, so Run works from other fol
 
 | Setting | Meaning |
 |---|---|
+| `border_type="yellow"` | Only the 15 approved active yellow designs. |
+| `border_type="gx"` | Only the nine approved active GX designs in gx_border/data/cards.csv. |
+| `border_type="all"` | Both lists, each card dispatched to its assigned engine. Limits count the combined batch. |
 | `pipeline="both"` | Centering first. Only complete centering passes proceed to validated back preparation and Luna. |
 | `pipeline="centering"` | Front measurements and centering gate only. No whitening API calls. |
 | `pipeline="api"` | Back whitening only. No centering analysis or centering gate; an accepted card is **not** certified centered. |
 | `output_mode="production"` | Main report/CSV/JSON list only accepted cards, with title, listing link, margins when measured, and brief whitening evidence. |
 | `output_mode="testing"` | Main report includes every analyzed listing, front overlay when available, usable original back, reasons, and whitening evidence. |
 | `centering_max_side_pct=53` | Both axes must be between 47 and 53. Setting 52.5 means 47.5–52.5. |
-| `allow_angular_variance=True` | Retain the prior overlap policy: eligible perspective scores above 0.15 up to 0.20 have a proposed ±1-point allowance. Report marks passes that depend on it. Set False for a strict point-estimate gate. |
+| `allow_angular_variance=True` | Yellow only: eligible perspective scores above 0.15 up to 0.20 have a proposed ±1-point allowance. GX keeps its own quality checks and no added allowance. Report marks passes that depend on the allowance. Set False for a strict point-estimate gate. |
 | `prepare_api_only=True` | Prepare/inspect back crops without paid API calls. In `both`/`api` these results remain undetermined, not accepted. |
 
 The quality gates are retained: hard exterior-background failures, unresolved axes,
@@ -78,8 +84,9 @@ to get a favorable answer. This checks visible back whitening, not authenticity 
 | `max_listings_per_card` | 3 | Per active CSV query. A listing has one presumed front: its first image. |
 | `max_listing_age_hours` | None | Maximum time since eBay listing start; None = any age. This is not the time the physical card has ever been offered across relistings. |
 | `max_candidates_per_card` | 100 | Search/detail budget per query. Non-NM listings can consume candidates without consuming analysis slots. |
-| `card_ids` | [] | All active CSV rows, or selected active IDs. Example: `["22", "23"]` for Charizard and Miltank. |
-| `cards_csv` | yellow_border/data/cards.csv | Only active rows. Structured Near Mint-or-better / ungraded condition and existing Ditto/Turtwig Ultra Rare filters are preserved. |
+| `card_ids` | [] | All active approved rows in the chosen border family, or selected IDs. Yellow examples: `["22", "23"]`; GX: `["eevee_sm233", "pikachu_sm232"]`. |
+| `cards_csv` | yellow_border/data/cards.csv | Approved yellow queries; active rows only. Existing Ditto/Turtwig Ultra Rare filters are preserved. |
+| `gx_cards_csv` | gx_border/data/cards.csv | Separate approved GX queries. Yellow's per-card rarity filters never apply to GX. Both families retain structured Near Mint-or-better/ungraded requirements. |
 | `shuffle_cards`, `random_seed` | True, 53 | Repeatable query order; set seed to None for new ordering. Small batches can stop before every query. |
 | `target_passes` | 0 | Zero = full batch; 3 = stop after three accepted under the selected pipeline. Listing/API caps still apply. |
 | `max_whitening_cards` | 15 | Hard cap on paid card evaluations: at most 45 calls with the reviewed 2–3-call workflow. This is a card cap, not an exact dollar budget. |
@@ -110,8 +117,19 @@ uploads/
 Supported files: JPG/JPEG, PNG, WEBP. Centering requires exactly one image named
 `front` with one of those extensions. API-only can use a folder containing only backs.
 Optional metadata: `{"card_id":"22","title":"Charizard example","url":"https://www.ebay.com/itm/..."}`.
-Without metadata each folder is its own card ID. Card-ID selection and per-card limits
-apply; eBay age/condition filters do not apply to local photos.
+Provide an approved `card_id` in metadata, or name the folder exactly after an approved
+ID (e.g. `eevee_sm233`). The catalog determines the fitter. If you also supply
+`border_type`, it must match that ID. Unknown IDs are refused; approved cards outside
+the selected family/IDs are skipped. Card-ID selection and per-card limits apply;
+eBay age/condition filters do not apply to local photos.
+
+Approval is defined in `approved_borders.json`; changing a search query cannot assign
+a card to a different engine. eBay titles must match the approved name, collector
+number and GX/non-GX marker. Missing/ambiguous/mismatched identities are skipped before
+fitting, counted as `identity_not_approved` in summary.json. This can reduce coverage
+for vague titles. It is metadata routing, not visual verification of mislabeled seller
+photos. No failed GX result is retried as yellow, and vice versa. API-only mode also
+limits sourcing to the chosen approved catalog.
 
 No URLs or keys are needed for local centering. Local whitening still requires an
 OpenAI key unless preparing crops only. Use this to retest saved problem images.
@@ -124,6 +142,7 @@ Each run creates a new `outputs/card_runs/TIMESTAMP_LABEL/`; nothing clears earl
 - `accepted.csv`, `accepted.json`: accepted cards only, with margins and brief API evidence.
 - `results.csv`: all records in testing mode, including individual stage timings.
 - `summary.json`: counts, stop reason, API attempts, and estimated cost (not billing).
+- Reports and CSVs identify the assigned border type; summary.json includes counts by family.
 - `_audit/run.json`: all decisions, effective settings, token usage and errors.
 - `_audit/Combined/`, `downloads/`, `details/`, `backs/`: evidence and diagnostics for debugging.
 
@@ -133,6 +152,8 @@ Printed centering overlays retain the original engine's "No centering selection 
 label: the runner applies its selection gate afterward; review.html/CSV show that final decision.
 
 To continue a stopped run on the same computer, set `resume_run` to that run folder.
+Pre-border-selector run files cannot be resumed into the new routing version; start
+a fresh run. The approved-catalog hash is saved, and a changed catalog requires a new run.
 Keep the same pipeline, gate, inputs, reference bank and output mode. You may raise
 listing/candidate limits, `max_whitening_cards` or `target_passes` and change worker count.
 Completed judgments are never repeated. An API request interrupted before its result

@@ -3,6 +3,11 @@ name: Run card pipeline
 on:
   workflow_dispatch:
     inputs:
+      border_type:
+        description: 'Approved border designs (each card uses only its assigned fitter)'
+        type: choice
+        options: [yellow, gx, all]
+        default: yellow
       pipeline:
         description: 'Pipelines: both = centering first, then whitening for passes'
         type: choice
@@ -26,7 +31,7 @@ on:
         type: number
         default: 3
       card_ids:
-        description: 'Active cards.csv IDs as JSON, e.g. ["22","23"]; [] = all'
+        description: 'Approved IDs as JSON, e.g. ["22"] or ["eevee_sm233"]; [] = all selected borders'
         type: string
         default: '[]'
       centering_max_side_pct:
@@ -34,7 +39,7 @@ on:
         type: number
         default: 53
       allow_angular_variance:
-        description: 'Allow existing +/-1-point overlap for qualifying angled photos'
+        description: 'Allow existing +/-1-point overlap for qualifying yellow-border photos'
         type: boolean
         default: true
       target_passes:

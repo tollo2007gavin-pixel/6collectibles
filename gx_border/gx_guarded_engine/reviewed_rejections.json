@@ -1,0 +1,104 @@
+{
+  "note": "Exact decoded-image reviews; not an image-quality classifier. Zekrom SM138 excluded from this registry and future sourcing.",
+  "records": {
+    "2978bc58bbb7b72ca36939549738d96fc72a37f80fb77f0541e1b97ed344cfa5": {
+      "issues": [
+        "holder_boundary_ambiguity"
+      ],
+      "note": "Holder-edge confusion."
+    },
+    "f28b4aeabb85c4c6c2a6873ceb5157f9b76fea5e1ea2069c4684b98005da5103": {
+      "issues": [
+        "holder_boundary_ambiguity"
+      ],
+      "note": "Holder-edge confusion.",
+      "approved_track_sha256": "4bc07c32032b5a5706cef76677fcc715cfc0204b4963f88154be115f08474905",
+      "approval_note": "2026-10-04: user approved current #14 Eevee SM174 lines. Supersedes older holder-confusion verdict only for this exact fit."
+    },
+    "c378ff14b72ecb458d265b363cdff0bae555a7b0f825176b0f2b56ef7ca4ac55": {
+      "issues": [
+        "unreliable_lighting",
+        "insufficient_boundary_detail"
+      ],
+      "note": "Lighting and camera distance make boundaries unreliable."
+    },
+    "ac27f5e97e4d439215ccdcc7ed944bfce7ac5b5bdf45394da54857fc034a9cac": {
+      "issues": [
+        "unreliable_lighting"
+      ],
+      "note": "Outer L/R fits deviate farther down the card; user attributes this to lighting."
+    },
+    "ab7c5a246d7e265d18d17d0c05c2197f5e3237db58fbc363af89fd066227bd5f": {
+      "issues": [
+        "holder_boundary_ambiguity"
+      ],
+      "note": "Holder-edge confusion."
+    },
+    "5c426b67b0544a3f69baddd4ef844f759da30470bcf823119094a0d4305f9e31": {
+      "issues": [
+        "unreliable_lighting",
+        "unreliable_perspective"
+      ],
+      "note": "Angle and lighting make measurement unreliable."
+    },
+    "2dccc54bd46c6c51e98efb317bc45c314bce474d1757827f7c55e21714f888d3": {
+      "issues": [
+        "unreliable_lighting",
+        "unreliable_perspective"
+      ],
+      "note": "Angle and lighting make measurement unreliable."
+    },
+    "3471fcaeb53486058a6b5714817e233a910d2a072871cf4017874ede7202aa2f": {
+      "issues": [
+        "unreliable_perspective",
+        "holder_boundary_ambiguity"
+      ],
+      "note": "Angle and holder make measurement unreliable."
+    },
+    "d0ab955c0acb5a810f657f3de9e1c9379dc6c1da0a71f597fdb73b29a2227bb8": {
+      "issues": [
+        "holder_boundary_ambiguity"
+      ],
+      "note": "Possible holder confusion: top line does not follow the card curvature."
+    },
+    "3c8eaed100f266ebabfe3a480180124aa555a1c4fe0392ae42e0c7061a4efd5f": {
+      "issues": [
+        "insufficient_boundary_detail"
+      ],
+      "note": "2026-10-04 user described #10 as poor and rejected. Saved result was complete; discrepancy documented. This is an explicit review block, not an automatic detector success."
+    },
+    "da3f0660dbb34f572385ba6a8857ca40f498c7f05c7aee95f3f91cddc087ecd6": {
+      "issues": [],
+      "note": "2026-10-04 user approved T/B rejection; no L/R rejection.",
+      "axis_issues": {
+        "tb": [
+          "insufficient_boundary_detail"
+        ]
+      }
+    },
+    "61432466a4a8b675262e92087d86d3ed35220c15756260df088ee38014cbb22b": {
+      "issues": [
+        "insufficient_boundary_detail"
+      ],
+      "note": "2026-10-04 user review: #23 rejected as unmeasurable/poor image."
+    },
+    "4b0b96e74231177e92c2c447c3e53de83ceaf9ea159ab8374a41aaab7b6acf84": {
+      "issues": [
+        "insufficient_boundary_detail"
+      ],
+      "note": "2026-10-04 user review: #24 rejected as unmeasurable/poor image."
+    },
+    "d36a3b9980ae7b4e125289649a386fa75ab4d484b04c18ba94940bfe40f368c5": {
+      "issues": [
+        "insufficient_boundary_detail"
+      ],
+      "note": "2026-10-04 user review: bottom exterior edge absent from image."
+    },
+    "a2ce23b88c7354a9eb5e51b7cc473fe62ad95ae3a7936b8d61ab9fddf9cdd8c0": {
+      "issues": [
+        "insufficient_boundary_detail"
+      ],
+      "note": "2026-10-04 user review: #33 rejected as unmeasurable/poor image."
+    }
+  }
+}

@@ -16,7 +16,7 @@ def combined(left=50., top=50., resolved=True, status="Measured", allowance=0.):
 
 
 def record(**kwargs):
-    return {"item_id": "v1|123|0", "card_id": "22", "title": "Test card", "url": "https://www.ebay.com/itm/123",
+    return {"item_id": "v1|123|0", "card_id": "22", "border_type": "yellow", "title": "Test card", "url": "https://www.ebay.com/itm/123",
             "image_url": "https://example.test/front.jpg", "combined": combined(**kwargs)}
 
 
@@ -163,10 +163,10 @@ class RunnerTests(unittest.TestCase):
         client = Mock()
         client.search.return_value = {"itemSummaries": [{"itemId": "used"}, {"itemId": "bad"}, {"itemId": "good"}, {"itemId": "later"}]}
         nm = {"conditionId": "4000", "conditionDescriptors": [{"name": "Card Condition", "values": [{"content": "Near Mint or Better"}]}],
-              "image": {"imageUrl": "https://example.test/front"}, "title": "good"}
+              "image": {"imageUrl": "https://example.test/front"}, "title": "Ditto GG22/GG70"}
         client.details.side_effect = [{"conditionId": "2750"}, nm]
         state = runner.new_state(s)
-        rows = list(runner.ebay_candidates(s, client, [{"id": "39", "search_query": "ditto"}], {"used"}, state))
+        rows = list(runner.ebay_candidates(s, client, [{"id": "39", "search_query": "ditto", "border_type": "yellow"}], {"used"}, state))
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0][0]["item_id"], "good")
         self.assertEqual(client.search.call_args.kwargs["age_hours"], 24)
@@ -210,6 +210,7 @@ class RunnerTests(unittest.TestCase):
                 folder = uploads / f"listing_{n}"
                 folder.mkdir(parents=True)
                 (folder / "front.jpg").write_bytes(b"fake-only-for-mocked-processor")
+                (folder / "metadata.json").write_text(json.dumps({"card_id": "22"}))
             s = runner.Settings(source="local", pipeline="centering", max_listings=3, target_passes=2, centering_workers=2,
                                 local_input_dir=str(uploads), output_root=str(base / "out"))
             out = runner.run(s, processor=fake_front)
@@ -231,6 +232,7 @@ class RunnerTests(unittest.TestCase):
                 folder = base / "uploads" / str(n)
                 folder.mkdir(parents=True)
                 (folder / "back.jpg").write_bytes(b"mock-back")
+                (folder / "metadata.json").write_text(json.dumps({"card_id": "22"}))
             s = runner.Settings(source="local", pipeline="api", max_listings=3, max_whitening_cards=1,
                                 local_input_dir=str(base / "uploads"), output_root=str(base / "out"))
             classifier = Mock(return_value={"decision": "not_clean", "stages": []})
