@@ -174,9 +174,16 @@ def prepare_back(client, detail, row, audit, s):
     from PIL import Image
     from organize_listings import process_card
     from card_utils import edge_corner_sheet, corner_closeup_sheet
-    images, seen = [], {row.get("image_url")}
-    for extra in (detail.get("additionalImages") or [])[:s.max_back_photos]:
-        url = extra.get("imageUrl")
+    images, seen = [], set()
+    # Search thumbnails are not guaranteed to be fronts. Keep the primary too,
+    # without displacing the existing additional-photo budget.
+    urls = [extra.get("imageUrl") for extra in (detail.get("additionalImages") or [])]
+    primary = (detail.get("image") or {}).get("imageUrl") or row.get("image_url")
+    extras = []
+    for url in urls:
+        if url and url != primary and url not in extras:
+            extras.append(url)
+    for url in extras[:s.max_back_photos] + [primary]:
         if not url or url in seen:
             continue
         seen.add(url)
@@ -198,7 +205,15 @@ def prepare_back(client, detail, row, audit, s):
     usable = [p for p in manifest["photos"] if p.get("side") == "back" and p.get("card_found")
               and not p.get("cut_off") and p.get("boundary_review", {}).get("status") == "ready"]
     if not usable:
-        return {"ready": False, "reason": "no_validated_back_photo", "manifest": str(folder / "manifest.json")}
+        originals = [str(folder / p["original_file"]) for p in manifest["photos"] if p.get("original_file")]
+        if not originals:
+            return {"ready": False, "reason": "no_readable_listing_photos", "manifest": str(folder / "manifest.json")}
+        # Geometry failure is not proof that no back exists. Let the vision
+        # assessment validate the originals, without presenting invented crops.
+        return {"ready": True, "card_id": cid, "context": originals,
+                "sheet": None, "tips": None, "input_mode": "original_photos",
+                "reason": "crop_unavailable_original_photo_fallback",
+                "manifest": str(folder / "manifest.json")}
     photo = max(usable, key=lambda p: p.get("sharpness", 0))
     card = cv2.imread(str(folder / photo["file"]))
     sheet, tips = folder / "luna_sheet.jpg", folder / "luna_tips.png"
@@ -207,7 +222,7 @@ def prepare_back(client, detail, row, audit, s):
     if not cv2.imwrite(str(tips), corner_closeup_sheet(card, "back")):
         raise OSError("Could not save corner tips")
     return {"ready": True, "card_id": cid, "context": str(folder / photo["original_file"]),
-            "sheet": str(sheet), "tips": str(tips), "manifest": str(folder / "manifest.json")}
+            "sheet": str(sheet), "tips": str(tips), "input_mode": "validated_crops", "manifest": str(folder / "manifest.json")}
 
 
 def finish_listing(row, detail, client, audit, s, bank, state, save, *, preparer=prepare_back, classifier=luna.classify):
@@ -355,6 +370,8 @@ def report_row(row):
             "angular_allowance_pp": max((v.get("uncertainty_pp") or 0 for v in gate_axes.values()), default=0),
             "depends_on_allowance": any(v.get("status") == "accepted_due_to_uncertainty" for v in gate_axes.values()),
             "whitening": whitening.get("decision", "not_run"), "evidence": evidence,
+            "whitening_input_mode": row.get("back_packet", {}).get("input_mode", ""),
+            "inspection_mode": whitening.get("timing", {}).get("inspection_mode", ""),
             "estimated_api_cost_usd": whitening.get("cost_usd", 0),
             **row.get("timings", {})}
 
@@ -362,7 +379,8 @@ def report_row(row):
 def write_csv(path, rows):
     fields = ["title", "url", "item_id", "border_type", "status", "reason", "left_pct", "right_pct", "top_pct", "bottom_pct",
               "angular_allowance_pp", "depends_on_allowance", "whitening", "evidence", "estimated_api_cost_usd",
-              "download_seconds", "centering_seconds", "back_preparation_seconds", "whitening_seconds"]
+              "download_seconds", "centering_seconds", "back_preparation_seconds", "whitening_seconds",
+              "whitening_input_mode", "inspection_mode"]
     with path.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.DictWriter(handle, fields, extrasaction="ignore")
         writer.writeheader()
@@ -385,6 +403,7 @@ def checkpoint(out, state, s):
                "processed": len(state["records"]), "accepted": len(accepted),
                "outcomes": dict(Counter(r["status"] for r in state["records"])),
                "whitening_attempts": state["whitening_attempts"],
+               "whitening_input_modes": dict(Counter(r.get("back_packet", {}).get("input_mode", "not_prepared") for r in state["records"])),
                "completed_api_responses": sum(len(r.get("whitening", {}).get("stages", [])) for r in state["records"]),
                "estimated_api_cost_usd": sum(r.get("whitening", {}).get("cost_usd", 0) for r in state["records"]),
                "fetch_counts": state["fetch_counts"], "errors": len(state["errors"])}
@@ -413,7 +432,11 @@ def checkpoint(out, state, s):
                 paths.append((out / "_audit" / overlay, "Centering overlay"))
             packet = row.get("back_packet", {})
             if packet.get("context"):
-                paths.append((Path(packet["context"]), "Original back"))
+                contexts = packet["context"] if isinstance(packet["context"], list) else [packet["context"]]
+                paths.extend((Path(p), f"Original listing photo {i}") for i, p in enumerate(contexts, 1))
+            for key, label in (("sheet", "Whitening sheet"), ("tips", "Corner tips")):
+                if packet.get(key):
+                    paths.append((Path(packet[key]), label))
             for path, label in paths:
                 relative = path.relative_to(out).as_posix()
                 images += f'<a href="{html.escape(relative, quote=True)}"><img loading="lazy" src="{html.escape(relative, quote=True)}" alt="{label}"></a>'

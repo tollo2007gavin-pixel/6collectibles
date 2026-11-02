@@ -19,7 +19,7 @@ Organize downloaded eBay results into a NEW folder:
 python organize_listings.py --from-results out/results.jsonl --out cards_luna --whitening-boundaries
 ```
 
-Use the statuses option if the fetcher's output uses other statuses. The boundary option is deliberately opt-in. It refines back photos only, saves original bytes and green boundary overlays, and sets ambiguous photos to card_found=false. Do not classify those as clean or damaged. Keep them for human review. Existing output folders are refused to prevent mixing old inspection sheets with new crops.
+Use the statuses option if the fetcher's output uses other statuses. The boundary option is deliberately opt-in. It refines back photos only, saves original bytes and green boundary overlays, and sets ambiguous photos to card_found=false. That means the crop is unvalidated, not that the listing lacks a back. Do not use that crop as condition evidence; the runner's original-photo fallback below can assess the uncropped source. Existing output folders are refused to prevent mixing old inspection sheets with new crops.
 
 For a photo whose manifest boundary_review.status is ready, produce the ordinary sheet and corner tips from its normalized image using card_utils.edge_corner_sheet(image, 'back') and card_utils.corner_closeup_sheet(image, 'back'). Save the tips as PNG and pass the matching original_file as context. Do not substitute sheets from a different photo. The source-image preparation option in WHITENING_INPUTS.md is an alternative experimental input format, not the layout validated for this Luna result.
 
@@ -40,3 +40,27 @@ python -m unittest discover -p "test_*.py"
 ```
 
 75 tests passed in the upload checkout, with no paid API calls. The yellow_border directory and card_utils (1).py were preserved from the latest remote branch. card_utils.py supplies the imports required by the root whitening pipeline. Generated reviews, listing batches, local notes, and credentials are not part of this upload.
+
+
+## Parallel inspections and timing
+The first two independent inspections run concurrently by default. A third runs only after both valid results arrive and disagree. Stage order stays standard view, tip view, tie-breaker regardless of completion order. Use --sequential for a comparison with the original ordering.
+
+Result timing includes file-hash validation, request preparation, concurrency-slot wait, each API call, and total assessment time. API duration includes transport and provider processing; it does not isolate server reasoning. These timers cover classification, not upstream eBay downloading or crop detection. Overlapping durations must not be added to estimate wall-clock time.
+
+A shared three-request cap per Python process prevents nested batch concurrency from doubling simultaneous API traffic. This can shorten individual-card latency, but a batch already keeping three requests busy may see little throughput gain. Multiple processes have separate caps.
+
+If one initial call fails or returns an invalid result, the other may already be running. Both outcomes and available usage are retained; no tie-breaker is sent, and the card remains needs_review. Parallel operation cannot promise the sequential path's one-call cost when the first response fails. No automatic retries are added.
+
+## Current GitHub runner: original-photo fallback
+
+The existing `Run card pipeline` workflow now uses the parallel classifier and records request timings and input hashes in `_audit/run.json`. Centering routing and thresholds are unchanged. No new workflow input is required.
+
+Back preparation examines up to `max_back_photos` unique additional images plus the primary listing image. It no longer assumes the primary is a front. Validated back crops still use the existing standard/tip inspection path.
+
+When no crop validates but readable originals exist, the runner sends those original photos directly to Luna, with no fabricated corner sheets. `input_mode=original_photos` distinguishes this fallback in audit records, summaries and CSV exports; the testing review shows those originals. The model must identify a target back and assess visibility before judging whitening. A Clean response is converted to `needs_review` unless both `back_visible` and `perimeter_assessable` are true; no visible back prevents either condition verdict. A visible defect can support Not clean with incomplete perimeter visibility. Missing/malformed visibility fields invalidate the response. No readable images remains an explicit preparation failure.
+
+Fallback calls use two parallel full-original inspections and a third only on disagreement. They preserve the per-card call cap and existing checkpoint-before-call behavior. More listings now reach the API, so cost and runtime may increase relative to silently skipping them. This mode has not inherited the 91.9% accuracy result measured on the validated-crop batch; it requires its own human-reviewed evaluation. Poor photos can still correctly return Needs review.
+
+Offline replay of `card-results-5.zip`: all 10 listings prepared successfully; the original two retained validated crops and all eight previously skipped listings reached original-photo fallback. The archive lacked the primary listing images, so replay tested the archived additional photos only. No paid calls were made and no condition labels were assigned by that replay. Images from the supplied ZIP are not committed to the repository.
+
+The workflow runs offline classifier, fallback and runner regression checks before live work. Multiple image inputs follow the [official image-input documentation](https://developers.openai.com/api/docs/guides/images-vision).
