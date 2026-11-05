@@ -20,28 +20,14 @@ def references(bank,target_id):
  for r in refs:
   if hashlib.sha256(Path(r['path']).read_bytes()).hexdigest()!=r['sha256']:raise ValueError('Reference image changed')
  return refs
-def original_system():
- system=SYSTEM.replace('The supplied sheet contains four corners and four edge strips of one photo; repeated appearances are the same evidence. ', '')
- system+=' Original-photo fallback: no validated crop sheet is available. First identify a genuine Pokemon card back among the target listing photos; fronts, packaging and unrelated images are not back evidence. Set back_visible accordingly. Set perimeter_assessable true only when all four corners and all four edges of the same card back can be inspected at sufficient detail. Return needs_review if no back is visible, the card identity across photos is ambiguous, or a clean judgment cannot be supported because of blur, glare, occlusion, cut-off edges or insufficient detail. Never infer clean from missing evidence. A visible genuine whitening defect can support not_clean even if another part of the perimeter is obscured. Identify the target photo number and location in your evidence. Ignore the reference cards when determining target visibility.'
- return system
-
 def request(context,sheet,tips,refs,claims=None):
  content=[{'type':'text','text':'Other human-confirmed reference cards follow. These are calibration examples, not the target.'}]
  for r in refs:content.extend([{'type':'text','text':'Reference: '+r['label']},image(r['path'])])
- original_only=sheet is None
- schema=SCHEMA
- system=SYSTEM
- if original_only:
-  schema={**SCHEMA,'required':SCHEMA['required']+['back_visible','perimeter_assessable'],'properties':{**SCHEMA['properties'],'back_visible':{'type':'boolean'},'perimeter_assessable':{'type':'boolean'}}}
-  system=original_system()
-  content.append({'type':'text','text':'TARGET: original listing photos follow. Side labels and crops could not be validated automatically. Verify back visibility and image quality before judging whitening.'})
-  for i,path in enumerate(context if isinstance(context,(list,tuple)) else [context],1):
-   content.extend([{'type':'text','text':f'Target original photo {i}'},image(path)])
- else:
-  content.append({'type':'text','text':'TARGET: assess only the following images of one card. The target label is unknown. First is the full original photo. Remaining images are crops of the same photo, not independent evidence.'});content.append(image(context));content.append(image(sheet))
+ if sheet is None:raise ValueError('Whitening requires a corner and edge sheet')
+ content.append({'type':'text','text':'TARGET: assess only the following images of one card. The target label is unknown. First is the full original photo. Remaining images are crops of the same photo, not independent evidence.'});content.append(image(context));content.append(image(sheet))
  if tips:content.extend([{'type':'text','text':'Enlarged corner tips from the same photo. Enlargement may amplify compression; inspect original context too.'},image(tips)])
  if claims is not None:content.append({'type':'text','text':'Two fallible inspections disagree. Treat their claims as hypotheses, not facts: '+json.dumps(claims)+'. Independently locate the described mark in the target images. Resolve card ink loss versus sleeve/glare/background. Do not decide by vote or by the presence of an accusation. Return the visible-condition judgment supported by the images.'})
- return {'model':MODEL,'messages':[{'role':'system','content':system},{'role':'user','content':content}],'max_completion_tokens':10000,'reasoning_effort':'xhigh','response_format':{'type':'json_schema','json_schema':{'name':'whitening','strict':True,'schema':schema}}}
+ return {'model':MODEL,'messages':[{'role':'system','content':SYSTEM},{'role':'user','content':content}],'max_completion_tokens':10000,'reasoning_effort':'xhigh','response_format':{'type':'json_schema','json_schema':{'name':'whitening','strict':True,'schema':SCHEMA}}}
 def call(body):
  d=providers._post('https://api.openai.com/v1/chat/completions',body,{'Authorization':'Bearer '+os.environ['OPENAI_API_KEY']});u=d.get('usage',{});ti=u.get('prompt_tokens',0);to=u.get('completion_tokens',0);cached=u.get('prompt_tokens_details',{}).get('cached_tokens',0)
  c=d['choices'][0];result={'usage':u,'cost_usd':((ti-cached)*.1+cached*.01+to*.5)/1e6,'response_id':d.get('id'),'model':d.get('model'),'finish_reason':c.get('finish_reason')}
@@ -49,9 +35,6 @@ def call(body):
   a=json.loads(c['message'].get('content') or '')
   expected=body['response_format']['json_schema']['schema']['required']
   if c.get('finish_reason')!='stop' or set(a)!=set(expected) or a['decision'] not in ['clean','not_clean','needs_review'] or not all(isinstance(a[k],str) for k in SCHEMA['required']):raise ValueError('Invalid response')
-  if 'back_visible' in expected:
-   if not all(type(a[k]) is bool for k in ['back_visible','perimeter_assessable']):raise ValueError('Invalid visibility response')
-   if not a['back_visible'] or (a['decision']=='clean' and not a['perimeter_assessable']):a['decision']='needs_review'
   result.update(a)
  except (ValueError,TypeError):result.update(decision='needs_review',location='',evidence='Invalid or incomplete model response',invalid=True)
  return result
@@ -106,14 +89,14 @@ def classify(context,sheet,tips,refs,caller=call,*,parallel=True):
  # Validate file readability before making any paid request.
  try:
   contexts=list(context) if isinstance(context,(list,tuple)) else [context]
-  if not contexts or (sheet is None and tips is not None) or (sheet is not None and (len(contexts)!=1 or tips is None)):raise ValueError('Expected original photos only, or one original with both crop sheets')
+  if len(contexts)!=1 or sheet is None or tips is None:raise ValueError('Whitening requires one original, a four-corner/edge sheet and a corner-tip sheet')
   inputs=[('context' if len(contexts)==1 else f'context_{i+1}',p) for i,p in enumerate(contexts)]
   if sheet is not None:inputs += [('sheet',sheet),('tips',tips)]
   provenance={
    'pipeline':'luna-consensus-v1',
    'requested_model':MODEL,
    'reasoning_effort':'xhigh',
-   'prompt_sha256':hashlib.sha256((original_system() if sheet is None else SYSTEM).encode()).hexdigest(),
+   'prompt_sha256':hashlib.sha256(SYSTEM.encode()).hexdigest(),
    'input_mode':'original_photos' if sheet is None else 'validated_crops',
    'input_sha256':{name:hashlib.sha256(Path(path).read_bytes()).hexdigest() for name,path in inputs},
    'references':[{'card_id':r['card_id'],'label':r['label'],'sha256':hashlib.sha256(Path(r['path']).read_bytes()).hexdigest()} for r in refs],

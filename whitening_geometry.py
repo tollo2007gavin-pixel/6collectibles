@@ -2,8 +2,8 @@
 import cv2
 import numpy as np
 from card_utils import find_card_quad as seed_quad, card_cut_off, CARD_W, CARD_H, PAD
-VERSION='supported-outer-lines-2'
-def detect(img):
+VERSION='supported-outer-lines-3'
+def _detect(img, blue_sat=75, blue_value=210, perimeter_only=False, band_width=.22):
  seed=seed_quad(img)
  if seed is None:
   # Legacy seeding assumes an almost front-on 1.4 aspect ratio. Allow perspective here.
@@ -22,6 +22,12 @@ def detect(img):
  scale=min(1.,800/max(img.shape[:2]));sm=cv2.resize(img,None,fx=scale,fy=scale) if scale<1 else img
  q=seed*scale;center=q.mean(0);width=min(np.linalg.norm(q[(i+1)%4]-q[i]) for i in range(4));lab=cv2.cvtColor(sm,cv2.COLOR_BGR2LAB).astype(float);hsv=cv2.cvtColor(sm,cv2.COLOR_BGR2HSV)
  edges=cv2.Canny(cv2.GaussianBlur(sm,(3,3),0),10,30)
+ # Limit line voting to the neighborhood of the seeded perimeter. Background
+ # texture and the Pokemon artwork otherwise overwhelm the actual border lines.
+ if perimeter_only:
+  mask=np.zeros(edges.shape,np.uint8)
+  cv2.polylines(mask,[np.rint(q).astype(np.int32)],True,255,max(12,int(width*band_width)))
+  edges=cv2.bitwise_and(edges,mask)
  segments=cv2.HoughLinesP(edges,1,np.pi/720,threshold=20,minLineLength=max(20,int(width*.15)),maxLineGap=20)
  if segments is None:return None,{'version':VERSION,'status':'needs_review','reason':'no_supported_lines'}
  chosen=[];metrics=[];side_options=[]
@@ -44,14 +50,14 @@ def detect(img):
     xy=np.rint(projected-outward*width*inset).astype(int)
     if xy[:,0].min()<0 or xy[:,1].min()<0 or xy[:,0].max()>=sm.shape[1] or xy[:,1].max()>=sm.shape[0]:continue
     samples=hsv[xy[:,1],xy[:,0]];h,sat,val=samples.T
-    colored=((h>=85)&(h<=140)&(sat>75)&(val>20)&(val<210))|((h>=5)&(h<=45)&(sat>70)&(val>25))
-    blue_support=max(blue_support,float(((h>=85)&(h<=140)&(sat>75)&(val>20)&(val<210)).mean()));gold_support=max(gold_support,float(((h>=5)&(h<=45)&(sat>70)&(val>25)).mean()));border_support=max(blue_support,gold_support)
+    colored=((h>=85)&(h<=140)&(sat>blue_sat)&(val>20)&(val<blue_value))|((h>=5)&(h<=45)&(sat>70)&(val>25))
+    blue_support=max(blue_support,float(((h>=85)&(h<=140)&(sat>blue_sat)&(val>20)&(val<blue_value)).mean()));gold_support=max(gold_support,float(((h>=5)&(h<=45)&(sat>70)&(val>25)).mean()));border_support=max(blue_support,gold_support)
    # An internal artwork edge has printed border on BOTH sides; a sleeve
    # usually has no saturated printed color immediately inside it.
    xy=np.rint(projected+outward*max(3,width*.012)).astype(int)
    if xy[:,0].min()<0 or xy[:,1].min()<0 or xy[:,0].max()>=sm.shape[1] or xy[:,1].max()>=sm.shape[0]:continue
    h,sat,val=hsv[xy[:,1],xy[:,0]].T
-   outer_blue=float(((h>=85)&(h<=140)&(sat>75)&(val>20)&(val<210)).mean())
+   outer_blue=float(((h>=85)&(h<=140)&(sat>blue_sat)&(val>20)&(val<blue_value)).mean())
    outer_gold=float(((h>=5)&(h<=45)&(sat>70)&(val>25)).mean())
    if outer_blue>.35:blue_support=0.
    if outer_gold>.35:gold_support=0.
@@ -80,6 +86,19 @@ def detect(img):
  area=abs(cv2.contourArea(result));oldarea=abs(cv2.contourArea(seed));sides=[np.linalg.norm(result[(i+1)%4]-result[i]) for i in range(4)]
  if not .65<area/oldarea<1.65 or max(sides)/min(sides)>2.2:return None,{'version':VERSION,'status':'needs_review','reason':'implausible_change'}
  return result,{'version':VERSION,'status':'ready','seed_quad':seed.tolist(),'quad':result.tolist(),'sides':metrics,'max_corner_shift_pixels':float(np.linalg.norm(result-seed,axis=1).max()),'heuristic_not_guaranteed':True}
+def detect(img):
+ # Retain successful legacy geometry exactly. Retry failed seeds near the
+ # perimeter; wider bands also cover seeds placed on the inner artwork panel.
+ quad, diagnostics = _detect(img)
+ diagnostics['recovery'] = 'legacy'
+ if quad is not None:return quad, diagnostics
+ for band in [.22,.42]:
+  for sat,value,profile in [(75,210,'strict'),(35,245,'pale_blue')]:
+   quad, diagnostics = _detect(img, blue_sat=sat, blue_value=value, perimeter_only=True, band_width=band)
+   diagnostics.update(recovery='perimeter_lines_'+profile,band_width=band)
+   if quad is not None:return quad, diagnostics
+ return quad, diagnostics
+
 def warp(img,quad):
  q=quad.copy()
  if np.linalg.norm(q[1]-q[0])>np.linalg.norm(q[2]-q[1]):q=q[[3,0,1,2]]
@@ -89,16 +108,25 @@ def warp(img,quad):
 def refine_manifest(card_dir,manifest):
     from pathlib import Path
     import json
-    from card_utils import sharpness
+    from card_utils import sharpness, classify_side
     card_dir=Path(card_dir)
     for photo in manifest.get('photos',[]):
-        if photo.get('side')!='back' or not photo.get('original_file'):continue
+        if photo.get('side') not in ('back','unknown') or not photo.get('original_file'):continue
         image=cv2.imread(str(card_dir/photo['original_file']))
         if image is None:
             photo['card_found']=False
             photo['boundary_review']={'status':'needs_review','reason':'unreadable_source'}
             continue
-        quad,diagnostics=detect(image);photo['boundary_review']=diagnostics
+        quad,diagnostics=detect(image)
+        if quad is not None:
+            normalized=warp(image,quad)
+            side,blue=classify_side(normalized)
+            if side!='back' or not all(s.get('blue_support',0)>=.6 for s in diagnostics.get('sides',[])):
+                quad=None
+                diagnostics={**diagnostics,'status':'needs_review','reason':'not_supported_blue_back'}
+            else:
+                photo['side']='back';photo['blue_ratio']=blue
+        photo['boundary_review']=diagnostics
         photo['card_found']=quad is not None
         if quad is None:
             photo.pop('boundary_overlay',None)

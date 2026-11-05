@@ -208,11 +208,9 @@ def prepare_back(client, detail, row, audit, s):
         originals = [str(folder / p["original_file"]) for p in manifest["photos"] if p.get("original_file")]
         if not originals:
             return {"ready": False, "reason": "no_readable_listing_photos", "manifest": str(folder / "manifest.json")}
-        # Geometry failure is not proof that no back exists. Let the vision
-        # assessment validate the originals, without presenting invented crops.
-        return {"ready": True, "card_id": cid, "context": originals,
-                "sheet": None, "tips": None, "input_mode": "original_photos",
-                "reason": "crop_unavailable_original_photo_fallback",
+        return {"ready": False, "card_id": cid, "context": originals,
+                "sheet": None, "tips": None, "input_mode": "sheet_preparation_failed",
+                "reason": "back_corner_sheet_unavailable",
                 "manifest": str(folder / "manifest.json")}
     photo = max(usable, key=lambda p: p.get("sharpness", 0))
     card = cv2.imread(str(folder / photo["file"]))

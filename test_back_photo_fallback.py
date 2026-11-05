@@ -26,8 +26,8 @@ class BackPhotoFallbackTests(unittest.TestCase):
 
     def test_primary_only_is_not_discarded_and_unknown_is_not_called_absent(self):
         p = self.prepare({})
-        self.assertTrue(p['ready'])
-        self.assertEqual(p['input_mode'], 'original_photos')
+        self.assertFalse(p['ready'])
+        self.assertEqual(p['input_mode'], 'sheet_preparation_failed')
         self.assertEqual(len(p['context']), 1)
         self.assertIsNone(p['sheet'])
         self.assertIsNone(p['tips'])
@@ -45,58 +45,48 @@ class BackPhotoFallbackTests(unittest.TestCase):
         self.assertFalse(p['ready'])
         self.assertEqual(p['reason'], 'no_readable_listing_photos')
 
-    def test_fallback_request_has_only_originals_and_explicit_visibility_schema(self):
-        p = self.prepare({})
-        body = luna.request(p['context'], None, None, [])
-        content = body['messages'][1]['content']
-        self.assertEqual(sum(c['type'] == 'image_url' for c in content), 1)
-        self.assertIn('back_visible', body['response_format']['json_schema']['schema']['required'])
-        self.assertIn('Never infer clean from missing evidence', body['messages'][0]['content'])
-        result = luna.classify(p['context'], None, None, [], lambda body: {'decision': 'needs_review', 'location': '', 'evidence': 'No back visible', 'cost_usd': 0})
-        self.assertEqual(result['decision'], 'needs_review')
-        self.assertEqual(result['provenance']['input_mode'], 'original_photos')
-        self.assertEqual(result['timing']['inspection_mode'], 'parallel')
-        self.assertEqual([a['inspection'] for a in result['timing']['attempts']], ['original_1', 'original_2'])
 
-    def test_empty_originals_fail_before_paid_calls(self):
+    def test_classifier_rejects_original_only_before_api(self):
         caller = Mock()
-        result = luna.classify([], None, None, [], caller)
+        result = luna.classify(["original.jpg"], None, None, [], caller)
         caller.assert_not_called()
         self.assertEqual(result['decision'], 'needs_review')
+        self.assertIn('four-corner', result['error'])
 
-    def test_visibility_gates_cannot_pass_an_unassessable_back(self):
-        p = self.prepare({})
-        body = luna.request(p['context'], None, None, [])
-        for back, perimeter, decision, expected in [(False, True, 'clean', 'needs_review'), (True, False, 'clean', 'needs_review'), (False, False, 'not_clean', 'needs_review'), (True, False, 'not_clean', 'not_clean'), (True, True, 'clean', 'clean')]:
-            answer = dict(decision=decision, location='corner', evidence='test', back_visible=back, perimeter_assessable=perimeter)
-            response = {'choices': [{'finish_reason': 'stop', 'message': {'content': json.dumps(answer)}}]}
-            with patch.dict('os.environ', {'OPENAI_API_KEY': 'test-only'}), patch.object(luna.providers, '_post', return_value=response):
-                self.assertEqual(luna.call(body)['decision'], expected)
-
-    def test_missing_visibility_is_invalid(self):
-        p = self.prepare({})
-        body = luna.request(p['context'], None, None, [])
-        answer = dict(decision='clean', location='', evidence='')
-        response = {'choices': [{'finish_reason': 'stop', 'message': {'content': json.dumps(answer)}}]}
-        with patch.dict('os.environ', {'OPENAI_API_KEY': 'test-only'}), patch.object(luna.providers, '_post', return_value=response):
-            self.assertTrue(luna.call(body)['invalid'])
-
-    def test_fallback_runs_through_coordinator_and_exports_photos(self):
+    def test_failed_sheets_remain_visible_without_paid_assessment(self):
         out = self.root / 'run'
         audit = out / '_audit'
         audit.mkdir(parents=True)
         settings = runner.Settings(pipeline='api')
         state = runner.new_state(settings)
         state['records'].append(self.row)
-        classifier = Mock(return_value={'decision': 'needs_review', 'stages': [], 'cost_usd': 0})
-        with patch.object(luna, 'references', return_value=[]):
-            runner.finish_listing(self.row, {}, self.client, audit, settings, [], state, lambda: None, classifier=classifier)
-        classifier.assert_called_once()
-        self.assertIsInstance(classifier.call_args.args[0], list)
+        classifier = Mock()
+        runner.finish_listing(self.row, {}, self.client, audit, settings, [], state, lambda: None, classifier=classifier)
+        classifier.assert_not_called()
         self.assertFalse(self.row['accepted'])
+        self.assertEqual(self.row['reason'], 'back_corner_sheet_unavailable')
         runner.checkpoint(out, state, settings)
         self.assertIn('Original listing photo 1', (out / 'review.html').read_text())
-        self.assertIn('original_photos', (out / 'results.csv').read_text())
+
+    def test_prepared_card_sends_both_generated_sheets(self):
+        pixels = np.full((900, 900, 3), 205, np.uint8)
+        cv2.rectangle(pixels, (220,160), (620,720), (150,30,15), -1)
+        cv2.rectangle(pixels, (250,190), (590,690), (190,140,90), -1)
+        self.client.download.return_value = cv2.imencode('.png',pixels)[1].tobytes()
+        packet = self.prepare({})
+        self.assertTrue(packet['ready'])
+        self.assertEqual(packet['input_mode'], 'validated_crops')
+        for name in ['context','sheet','tips']:
+            self.assertIsNotNone(cv2.imread(packet[name]))
+        bodies=[]
+        def caller(body):
+            bodies.append(body)
+            return {'decision':'clean','location':'','evidence':'test only','cost_usd':0}
+        result=luna.classify(packet['context'],packet['sheet'],packet['tips'],[],caller,parallel=False)
+        self.assertEqual(result['decision'],'clean')
+        self.assertEqual([sum(x['type']=='image_url' for x in b['messages'][1]['content']) for b in bodies],[2,3])
+        self.assertEqual(bodies[0]['messages'][1]['content'][-1],luna.image(packet['sheet']))
+        self.assertEqual(bodies[1]['messages'][1]['content'][-1],luna.image(packet['tips']))
 
 
 if __name__ == '__main__':

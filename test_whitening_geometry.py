@@ -15,4 +15,29 @@ class DetectorTests(unittest.TestCase):
   result,_=g.detect(im)
   if result is not None:self.assertLess(np.linalg.norm(q-result,axis=1).max(),10)
  def test_blank(self):self.assertIsNone(g.detect(np.zeros((600,800,3),np.uint8))[0])
+ def test_textured_background_recovery(self):
+  im,q=self.make((150,30,15),[[220,160],[620,160],[620,720],[220,720]])
+  gray=np.random.default_rng(123).integers(40,160,im.shape[:2],dtype=np.uint8)
+  texture=cv2.cvtColor(gray,cv2.COLOR_GRAY2BGR)
+  mask=np.zeros(im.shape[:2],np.uint8);cv2.fillConvexPoly(mask,q.astype(int),255)
+  im[mask==0]=texture[mask==0]
+  result,_=g.detect(im);self.assertIsNotNone(result);self.assertLess(np.linalg.norm(q-result,axis=1).max(),g.PAD/g.CARD_W*400)
+ def test_pale_blue_border(self):
+  im,q=self.make((150,130,125),[[220,160],[620,160],[620,720],[220,720]])
+  result,_=g.detect(im);self.assertIsNotNone(result);self.assertLess(np.linalg.norm(q-result,axis=1).max(),10)
+ def test_successful_legacy_geometry_is_preserved(self):
+  im,q=self.make((150,30,15),[[220,160],[620,160],[620,720],[220,720]])
+  before,_=g._detect(im);after,d=g.detect(im)
+  np.testing.assert_array_equal(before,after);self.assertEqual(d['recovery'],'legacy')
+ def test_unknown_photo_requires_supported_blue_back(self):
+  import tempfile
+  from pathlib import Path
+  for color,expected in [((150,30,15),True),((15,130,180),False)]:
+   with tempfile.TemporaryDirectory() as tmp:
+    folder=Path(tmp);im,_=self.make(color,[[220,160],[620,160],[620,720],[220,720]])
+    cv2.imwrite(str(folder/'original.png'),im)
+    m={'photos':[{'side':'unknown','original_file':'original.png','file':'unknown.jpg'}]}
+    g.refine_manifest(folder,m)
+    self.assertEqual(m['has_back'],expected)
+    if expected:self.assertEqual(m['photos'][0]['side'],'back')
 if __name__=='__main__':unittest.main()
