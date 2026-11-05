@@ -66,7 +66,7 @@ def build_batch(out, state, production=False, embed=True):
                                             'centering': row.get('centering_gate'), 'measurements': row.get('combined', {}).get('axes', {}),
                                             'evidence': [{k: s.get(k, '') for k in ['decision', 'location', 'evidence']} for s in whitening.get('stages', [])],
                                             'input_mode': packet.get('input_mode', ''), 'error': row.get('error') or whitening.get('error')},
-                      'timings': row.get('timings', {}), 'images': images})
+                      'detection': row.get('detection'), 'timings': row.get('timings', {}), 'images': images})
     if len({c['id'] for c in cards}) != len(cards):
         raise ValueError('Duplicate listing IDs in review')
     identity = {'started_utc': state.get('started_utc'), 'pipeline': state['settings']['pipeline'],

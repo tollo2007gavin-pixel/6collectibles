@@ -9,10 +9,19 @@ on:
         options: [yellow, gx, all]
         default: yellow
       pipeline:
-        description: 'Pipelines: both = centering first, then whitening for passes'
+        description: 'detection = back photo/outline test only; api = whitening; both = centering then whitening'
         type: choice
-        options: [both, centering, api]
+        options: [both, centering, api, detection]
         default: both
+      detection_method:
+        description: 'Detection tests only: shared_baseline = existing shared detector; validated_whitening = stricter current checks'
+        type: choice
+        options: [shared_baseline, validated_whitening]
+        default: shared_baseline
+      replay_run_id:
+        description: 'Detection only: previous GitHub run ID to reuse saved originals; blank = new eBay listings'
+        type: string
+        default: ''
       output_mode:
         description: 'production = accepted summaries; testing = all results and images'
         type: choice
@@ -65,6 +74,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: manual-card-pipeline
@@ -87,10 +97,21 @@ jobs:
           cache-dependency-path: requirements_runner.txt
       - name: Install production dependencies
         run: python -m pip install -r requirements_runner.txt
+      - name: Prepare workflow inputs
+        run: python detection_replay.py --workflow-inputs
+      - name: Download saved batch
+        if: ${{ inputs.replay_run_id != '' && inputs.pipeline == 'detection' }}
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.replay_run_id }}
+          pattern: card-results-*
+          path: replay_batch
+          merge-multiple: true
       - name: Check settings and reference files
         run: python run_cards.py --check
       - name: Check whitening and back-photo handling (offline)
-        run: python -m unittest test_luna_whitening test_back_photo_fallback test_card_runner test_card_review test_whitening_geometry test_review_corners
+        run: python -m unittest test_luna_whitening test_back_photo_fallback test_card_runner test_card_review test_whitening_geometry test_review_corners test_detection_mode
       - name: Check review interactions (offline)
         run: node test_card_review_ui.js
       - name: Run selected pipelines

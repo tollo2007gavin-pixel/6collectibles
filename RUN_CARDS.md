@@ -183,3 +183,18 @@ python run_cards.py --check
 
 These tests use fake network/API responses and local generated fixtures. They do not
 start a live eBay batch or spend whitening API credits.
+
+### Back detection tests in GitHub
+
+In **Actions → Run card pipeline → Run workflow**:
+
+- Set **pipeline** to **detection**.
+- Set **detection_method** to **shared_baseline** for the existing shared card detector, or **validated_whitening** for the current stricter whitening preparation. These run existing algorithms without changing their thresholds. `shared_baseline` means the current shared implementation, not a frozen historical release.
+- Set **max_listings** to your sample size. The usual approved card queries and border selection still apply.
+- Leave **replay_run_id** blank to gather new eBay listings. To reuse a saved batch, enter the numeric ID from a previous run's URL (`.../actions/runs/123456...`). Its `card-results-*` artifact must still be available and contain originals and manifests. A review HTML or JPG sheets alone cannot be replayed.
+
+Detection mode always retains every processed listing, ignores centering acceptance and paid-whitening limits, and makes no whitening calls. It does not count a prepared sheet as a passing card. It uses only eBay credentials for fresh listings; saved-batch replay uses downloaded originals without listing searches. Detector source hashes are recorded with each result.
+
+Download the new card-results artifact and open **review.html**. Review the selected original, detected outlines, sheets and other originals. Answer **Did it select a suitable back photo?** and **Does the outline follow the physical card edges?** separately, then add notes. Save reviewed HTML or export JSON; JSON contains detection answer counts and preparation timings. Human accuracy figures require completed reviews.
+
+A replay starts a new output batch, retains listing IDs, and tests the downloaded originals. It does not overwrite the earlier artifact. Older runs missing saved originals stop with an explanation. GitHub artifacts expire after their retention period (currently 14 days).

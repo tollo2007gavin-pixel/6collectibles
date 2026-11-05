@@ -109,6 +109,7 @@ def process_card(card_id: str, images: list[tuple[str, np.ndarray | None]], out_
         cv2.imwrite(str(d / f"check_{side}_{counts[side]}.jpg"),
                     cv2.resize(check, None, fx=s, fy=s) if s < 1 else check, [cv2.IMWRITE_JPEG_QUALITY, 80])
         photos.append({"source": src, "file": name, "original_file": original_name, "side": side, "card_found": found, "cut_off": cut_off,
+                       "detected_quad": pts.tolist() if pts is not None else None, "boundary_overlay": f"check_{side}_{counts[side]}.jpg",
                        "blue_ratio": blue, "sharpness": round(sharpness(card), 1)})
     manifest = {"card_id": card_id, **meta, "photos": photos,
                 "complete": bool(photos) and all('file' in p for p in photos),

@@ -32,6 +32,8 @@ from yellow_batch_engine.measurement_screening import screen_axis
 @dataclass
 class Settings:
     pipeline: str = "both"
+    detection_method: str = "shared_baseline"
+    replay_folder: str = ""
     border_type: str = "yellow"
     output_mode: str = "testing"
     source: str = "ebay"
@@ -68,10 +70,12 @@ def path_at_root(value):
 
 
 def validate(s):
-    for name, choices in {"pipeline": {"both", "centering", "api"},
+    for name, choices in {"pipeline": {"both", "centering", "api", "detection"}, "detection_method": {"shared_baseline", "validated_whitening"},
                           "border_type": {"yellow", "gx", "all"}, "source": {"ebay", "local"}, "output_mode": {"testing", "production"}}.items():
         if getattr(s, name) not in choices:
             raise ValueError(f"{name} must be one of {sorted(choices)}")
+    if s.replay_folder and s.pipeline != "detection":
+        raise ValueError("Saved batch replay requires detection mode")
     for name in ("max_listings", "max_listings_per_card", "max_candidates_per_card", "centering_workers", "max_back_photos"):
         if type(getattr(s, name)) is not int or getattr(s, name) < 1:
             raise ValueError(f"{name} must be a positive integer")
@@ -93,7 +97,7 @@ def validate(s):
             raise ValueError(f"{name} must be True or False")
     if s.random_seed is not None and type(s.random_seed) is not int:
         raise ValueError("random_seed must be an integer or None")
-    for name in ("cards_csv", "gx_cards_csv", "references_json", "output_root", "local_input_dir", "env_file", "run_label"):
+    for name in ("replay_folder", "cards_csv", "gx_cards_csv", "references_json", "output_root", "local_input_dir", "env_file", "run_label"):
         if not isinstance(getattr(s, name), str):
             raise ValueError(f"{name} must be text")
     if not re.fullmatch(r"[A-Za-z0-9_-]{0,60}", s.run_label):
@@ -201,9 +205,9 @@ def prepare_back(client, detail, row, audit, s):
     # Variations have separate folders even when sharing an eBay numeric item ID.
     folder_id = hashlib.sha256(row["item_id"].encode()).hexdigest()[:16]
     folder = audit / "backs" / folder_id
-    manifest = process_card(folder_id, images, audit / "backs", {"item_id": row["item_id"]}, whitening_boundaries=True)
+    manifest = process_card(folder_id, images, audit / "backs", {"item_id": row["item_id"]}, whitening_boundaries=s.pipeline != "detection" or s.detection_method == "validated_whitening")
     usable = [p for p in manifest["photos"] if p.get("side") == "back" and p.get("card_found")
-              and not p.get("cut_off") and p.get("boundary_review", {}).get("status") == "ready"]
+              and not p.get("cut_off") and (s.pipeline == "detection" and s.detection_method == "shared_baseline" or p.get("boundary_review", {}).get("status") == "ready")]
     if not usable:
         originals = [str(folder / p["original_file"]) for p in manifest["photos"] if p.get("original_file")]
         if not originals:
@@ -220,14 +224,14 @@ def prepare_back(client, detail, row, audit, s):
     if not cv2.imwrite(str(tips), corner_closeup_sheet(card, "back")):
         raise OSError("Could not save corner tips")
     return {"ready": True, "card_id": cid, "context": str(folder / photo["original_file"]),
-            "sheet": str(sheet), "tips": str(tips), "input_mode": "validated_crops", "manifest": str(folder / "manifest.json")}
+            "sheet": str(sheet), "tips": str(tips), "input_mode": "baseline_crops" if s.pipeline == "detection" and s.detection_method == "shared_baseline" else "validated_crops", "manifest": str(folder / "manifest.json")}
 
 
 def finish_listing(row, detail, client, audit, s, bank, state, save, *, preparer=prepare_back, classifier=luna.classify):
     border_routing.validate_route(row)
     row.update(status="undetermined", accepted=False, reason="not_finished")
     row["whitening"] = {"decision": "not_run"}
-    if s.pipeline != "api":
+    if s.pipeline not in {"api", "detection"}:
         gate = centering_gate(row["combined"], s)
         row["centering_gate"] = gate
         if not gate["accepted"]:
@@ -236,13 +240,18 @@ def finish_listing(row, detail, client, audit, s, bank, state, save, *, preparer
         if s.pipeline == "centering":
             row.update(status="pass", accepted=True, reason="centering_pass")
             return
-    if not s.prepare_api_only and state["whitening_attempts"] >= s.max_whitening_cards:
+    if s.pipeline != "detection" and not s.prepare_api_only and state["whitening_attempts"] >= s.max_whitening_cards:
         row["reason"] = "whitening_limit_reached"
         return
     started = time.perf_counter()
     packet = preparer(client, detail, row, audit, s)
     row.setdefault("timings", {})["back_preparation_seconds"] = time.perf_counter() - started
     row["back_packet"] = packet
+    if s.pipeline == "detection":
+        row.update(reason="detection_sheet_ready" if packet["ready"] else packet["reason"],
+                   detection={"method": s.detection_method, "code_sha256": {name: hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in ("card_utils.py", "whitening_geometry.py")}, "sheet_ready": packet["ready"], "selected_original": packet.get("context") if packet["ready"] else None},
+                   whitening={"decision": "not_run"})
+        return
     if not packet["ready"]:
         row.update(reason=packet["reason"], whitening={"decision": "needs_review", "reason": packet["reason"]})
         return
@@ -304,7 +313,7 @@ def local_candidates(s, seen, state):
             continue
         photos = sorted(p for p in folder.iterdir() if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"})
         fronts = [p for p in photos if p.stem.lower() == "front"]
-        if s.pipeline != "api" and len(fronts) != 1:
+        if s.pipeline not in {"api", "detection"} and len(fronts) != 1:
             raise ValueError(f"{folder}: provide exactly one front.jpg/png/webp")
         front = fronts[0] if fronts else None
         seen.add(itemid)
@@ -438,8 +447,10 @@ def previous_ids(root):
 
 def run(s, *, client_factory=None, processor=front_worker, preparer=prepare_back, classifier=luna.classify):
     validate(s)
+    if s.pipeline == "detection":
+        s = replace(s, output_mode="testing", target_passes=0, prepare_api_only=True)
     cards = selected_cards(s)
-    bank = load_bank(s.references_json) if s.pipeline != "centering" and not s.prepare_api_only else None
+    bank = load_bank(s.references_json) if s.pipeline not in {"centering", "detection"} and not s.prepare_api_only else None
     root = path_at_root(s.output_root)
     if s.resume_run:
         out = path_at_root(s.resume_run)
@@ -469,10 +480,10 @@ def run(s, *, client_factory=None, processor=front_worker, preparer=prepare_back
     def target_reached():
         return s.target_passes > 0 and sum(r.get("accepted", False) for r in state["records"]) >= s.target_passes
     try:
-        client = client_factory() if client_factory else LocalClient() if s.source == "local" else yellow.EbayClient()
-        candidates = iter(local_candidates(s, seen, state) if s.source == "local" else ebay_candidates(s, client, cards, seen, state))
-        capacity = s.centering_workers if s.pipeline != "api" else 1
-        if s.pipeline != "api" and capacity > 1:
+        client = client_factory() if client_factory else LocalClient() if s.source == "local" else LocalClient() if s.replay_folder else yellow.EbayClient()
+        candidates = iter(__import__("detection_replay").candidates(s.replay_folder) if s.replay_folder else local_candidates(s, seen, state) if s.source == "local" else ebay_candidates(s, client, cards, seen, state))
+        capacity = s.centering_workers if s.pipeline not in {"api", "detection"} else 1
+        if s.pipeline not in {"api", "detection"} and capacity > 1:
             pool = ProcessPoolExecutor(max_workers=capacity)
         exhausted = False
         while not target_reached() and len(state["records"]) < s.max_listings:
@@ -484,14 +495,14 @@ def run(s, *, client_factory=None, processor=front_worker, preparer=prepare_back
                     break
                 started = time.perf_counter()
                 try:
-                    if s.pipeline == "api":
+                    if s.pipeline in {"api", "detection"}:
                         future, row = None, dict(meta)
                     else:
                         content = client.download(meta["image_url"])
                         seconds = time.perf_counter() - started
                         future = pool.submit(processor, content, meta, str(audit)) if pool else None
                         row = None if future else processor(content, meta, str(audit))
-                    pending.append((meta, detail, future, row, 0. if s.pipeline == "api" else seconds, None))
+                    pending.append((meta, detail, future, row, 0. if s.pipeline in {"api", "detection"} else seconds, None))
                 except Exception as error:
                     pending.append((meta, detail, None, None, time.perf_counter() - started, providers.redact_error(error)))
             if not pending:
@@ -572,12 +583,12 @@ def main(settings, argv=None):
         selected_cards(settings)
         if settings.source == "local" and not path_at_root(settings.local_input_dir).is_dir():
             raise ValueError("local_input_dir does not exist")
-        if settings.pipeline != "centering" and not settings.prepare_api_only:
+        if settings.pipeline not in {"centering", "detection"} and not settings.prepare_api_only:
             load_bank(settings.references_json)
         from dotenv import load_dotenv
         load_dotenv(path_at_root(settings.env_file))
-        needed = (["EBAY_CLIENT_ID", "EBAY_CLIENT_SECRET"] if settings.source == "ebay" else [])
-        if settings.pipeline != "centering" and not settings.prepare_api_only and settings.max_whitening_cards > 0:
+        needed = (["EBAY_CLIENT_ID", "EBAY_CLIENT_SECRET"] if settings.source == "ebay" and not settings.replay_folder else [])
+        if settings.pipeline not in {"centering", "detection"} and not settings.prepare_api_only and settings.max_whitening_cards > 0:
             needed.append("OPENAI_API_KEY")
         missing = [key for key in needed if not os.getenv(key)]
         if args.check or settings.check_only:

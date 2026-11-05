@@ -28,6 +28,10 @@ function boot(embedded=null,failStorage=false){
  for(const [x,y] of [[45,60],[405,60],[405,540],[45,540]])t.get('cornerCanvas').onclick({clientX:x,clientY:y});
  t.get('saveCorners').onclick();assert.equal(t.run('payload().cards[0].human_review.manual_corners.points.length'),4);assert.equal(t.run('payload().cards[0].pipeline_decision.whitening'),'clean');
  t.get('undoCorner').onclick();assert.equal(t.run('cornerPoints.length'),3);t.get('next').onclick();assert.equal(t.get('cornerCanvas').hidden,true);assert.equal(t.run('cornerPoints.length'),0);
+ batch.pipeline='detection';storage.clear();t=boot(null,true);t.get('backSelection').value='missed_back';t.get('outlineQuality').value='cannot_assess';t.get('notes').value='Back is photo 3';t.run('capture()');
+ assert.equal(t.run('payload().detection_summary.reviewed'),1);t.get('export').onclick();const detection=JSON.parse(await t.downloads.at(-1).text());
+ t=boot(detection);assert.equal(t.get('backSelection').value,'missed_back');assert.equal(t.get('outlineQuality').value,'cannot_assess');t.get('unreviewed').onclick();assert.equal(t.run('index'),1);
+ console.log('Detection feedback passed: separate answers, progress, export/restore and navigation.');
  console.log('Manual corners passed: preserve during notes edit, HTML restore, coordinate/photo validation, remove correction.');
  console.log('UI passed: blank answers, edits, navigation, export JSON, saved HTML restore, blocked storage, import and malformed/cross-batch rejection.');
 })().catch(e=>{console.error(e);process.exitCode=1});
