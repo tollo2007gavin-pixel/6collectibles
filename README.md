@@ -46,3 +46,35 @@ EBAY_CLIENT_ID, EBAY_CLIENT_SECRET, and one of OPENAI_API_KEY / GEMINI_API_KEY /
 ## Reviewed Luna whitening
 
 See [LUNA_WHITENING.md](LUNA_WHITENING.md) for the optimized Luna configuration, automatic crop checks, local calibration setup, offline tests, and the latest human-reviewed results.
+# Reviewing and sharing test results
+
+Keep the existing **Run card pipeline** dropdown settings and select **testing**
+to include every decision. Download and extract the resulting `card-results`
+artifact, then open `review.html` in a browser. Completed runs embed available
+photos, so the HTML also works independently of the extracted image folders.
+Production reports continue to show accepted cards only.
+
+The review shows one card at a time with its pipeline decision, evidence,
+original photos, crop sheets and any saved centering/outline views. Use
+Previous/Next, the card selector or Next unreviewed to navigate. Mark the
+decision **Correct**, **Incorrect** or **Unsure**, optionally supply your own
+decision, and add notes. Human answers are never prefilled from model results.
+
+- **Save reviewed HTML** downloads a portable copy with photos and feedback.
+  Send that file to colleagues; opening it restores the embedded answers.
+- **Export review JSON** downloads a compact, structured record containing
+  pipeline decisions, human feedback, notes and image hashes. Share it with
+  chat models or use **Import review JSON** to resume a review.
+- Browser autosave is convenient but browser-specific. Download backups
+  regularly. The page does not upload feedback or photos anywhere.
+
+Live checkpoints use relative photos to avoid rebuilding a large embedded page
+after every card. The final report embeds images once. To upgrade an older
+extracted result without new API calls:
+
+```sh
+python card_review.py path/to/extracted/run-folder
+```
+
+This resolves archived GitHub-runner paths against the local `_audit` folder.
+Missing photos are shown as unavailable rather than fetched from the internet.

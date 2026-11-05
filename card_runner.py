@@ -412,42 +412,8 @@ def checkpoint(out, state, s):
     write_csv(out / "accepted.csv", [report_row(r) for r in accepted])
     if s.output_mode == "testing":
         write_csv(out / "results.csv", [report_row(r) for r in shown])
-    sections = []
-    for row in shown:
-        r = report_row(row)
-        margins = []
-        for label, first, second in (("L/R", "left_pct", "right_pct"), ("T/B", "top_pct", "bottom_pct")):
-            margins.append(f'{label}: {r[first]:.2f}/{r[second]:.2f}' if r[first] is not None else f'{label}: not measured')
-        title = html.escape(str(row["title"]))
-        url = safe_link(str(row.get("url", "")))
-        heading = f'<a href="{url}">{title}</a>' if url else title
-        allowance = f' | Angular allowance: ±{r["angular_allowance_pp"]:g} point' if r["angular_allowance_pp"] else ""
-        if r["depends_on_allowance"]:
-            allowance += " (required to pass)"
-        images = ""
-        if s.output_mode == "testing":
-            paths = []
-            overlay = row.get("overlays", {}).get("combined")
-            if overlay:
-                paths.append((out / "_audit" / overlay, "Centering overlay"))
-            packet = row.get("back_packet", {})
-            if packet.get("context"):
-                contexts = packet["context"] if isinstance(packet["context"], list) else [packet["context"]]
-                paths.extend((Path(p), f"Original listing photo {i}") for i, p in enumerate(contexts, 1))
-            for key, label in (("sheet", "Whitening sheet"), ("tips", "Corner tips")):
-                if packet.get(key):
-                    paths.append((Path(packet[key]), label))
-            for path, label in paths:
-                relative = path.relative_to(out).as_posix()
-                images += f'<a href="{html.escape(relative, quote=True)}"><img loading="lazy" src="{html.escape(relative, quote=True)}" alt="{label}"></a>'
-        sections.append(f'<article><h2>{heading}</h2><p><b>{r["status"].upper()}</b> · {html.escape(r["border_type"].upper())} · {html.escape(r["reason"])}</p>'
-                        f'<p>{" · ".join(margins)}{allowance} · Whitening: {html.escape(r["whitening"])}</p>'
-                        f'<p>{html.escape(r["evidence"])}</p>{images}</article>')
-    intro = f'{summary["processed"]} processed · {summary["accepted"]} accepted · {html.escape(state["state"])}'
-    page = '<!doctype html><html><meta charset="utf-8"><title>Card pipeline results</title><style>body{font:16px system-ui;max-width:1200px;margin:32px auto;padding:0 20px;background:#f5f6f8;color:#182235}article{background:white;padding:22px;margin:20px 0;border-radius:12px}img{max-width:48%;vertical-align:top}a{color:#165bc2}h2{font-size:20px}</style>'
-    page += f'<h1>Card pipeline — {s.pipeline}</h1><p>{intro}</p><p>{s.output_mode.capitalize()} report. Measurements are estimates; whitening concerns visible photographed condition.</p>'
-    page += ''.join(sections) or '<p>No completed results to display yet.</p>'
-    (out / "review.html").write_text(page + '</html>', encoding="utf-8")
+    from card_review import write_review
+    write_review(out, state, production=s.output_mode == "production", embed=state["state"] != "running")
 
 
 def identity_settings(s):

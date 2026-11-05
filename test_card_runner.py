@@ -181,6 +181,7 @@ class RunnerTests(unittest.TestCase):
             state = runner.new_state(s)
             passed = dict(record(), status="pass", accepted=True, reason="clean_back", whitening={"decision": "clean"})
             failed = dict(record(), title="REJECTED_SENTINEL", status="reject", accepted=False, reason="outside_centering_gate")
+            failed['item_id'] = 'v1|456|0'
             passed["title"] = "<script>alert('x')</script>"
             passed["url"] = "javascript:alert(1)"
             state["records"] = [passed, failed]
