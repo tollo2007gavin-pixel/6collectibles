@@ -66,7 +66,7 @@ class BackPhotoFallbackTests(unittest.TestCase):
         self.assertFalse(self.row['accepted'])
         self.assertEqual(self.row['reason'], 'back_corner_sheet_unavailable')
         runner.checkpoint(out, state, settings)
-        self.assertIn('Original listing photo 1', (out / 'review.html').read_text())
+        self.assertIn('Original listing photo 1', (out / 'review.html').read_text(encoding='utf-8'))
 
     def test_prepared_card_sends_both_generated_sheets(self):
         pixels = np.full((900, 900, 3), 205, np.uint8)

@@ -2,8 +2,8 @@
 import cv2
 import numpy as np
 from card_utils import find_card_quad as seed_quad, card_cut_off, CARD_W, CARD_H, PAD
-VERSION='supported-outer-lines-3'
-def _detect(img, blue_sat=75, blue_value=210, perimeter_only=False, band_width=.22):
+VERSION='supported-outer-lines-4'
+def _detect(img, blue_sat=75, blue_value=210, perimeter_only=False, band_width=.22, fabric_recovery=False):
  seed=seed_quad(img)
  if seed is None:
   # Legacy seeding assumes an almost front-on 1.4 aspect ratio. Allow perspective here.
@@ -29,6 +29,13 @@ def _detect(img, blue_sat=75, blue_value=210, perimeter_only=False, band_width=.
   cv2.polylines(mask,[np.rint(q).astype(np.int32)],True,255,max(12,int(width*band_width)))
   edges=cv2.bitwise_and(edges,mask)
  segments=cv2.HoughLinesP(edges,1,np.pi/720,threshold=20,minLineLength=max(20,int(width*.15)),maxLineGap=20)
+ if fabric_recovery:
+  # LSD supplies short/low-contrast straight segments that global Hough voting
+  # can miss. Candidate edges still require contrast, printed border and valid geometry.
+  gray=cv2.cvtColor(sm,cv2.COLOR_BGR2GRAY)
+  lines=cv2.createLineSegmentDetector().detect(gray)[0]
+  if lines is not None:
+   segments=lines if segments is None else np.concatenate((segments.astype(np.float32),lines),axis=0)
  if segments is None:return None,{'version':VERSION,'status':'needs_review','reason':'no_supported_lines'}
  chosen=[];metrics=[];side_options=[]
  for i in range(4):
@@ -42,7 +49,7 @@ def _detect(img, blue_sat=75, blue_value=210, perimeter_only=False, band_width=.
    left=np.rint(projected+normal*3).astype(int);right=np.rint(projected-normal*3).astype(int)
    if min(left[:,0].min(),right[:,0].min(),left[:,1].min(),right[:,1].min())<0 or max(left[:,0].max(),right[:,0].max())>=sm.shape[1] or max(left[:,1].max(),right[:,1].max())>=sm.shape[0]:continue
    delta=np.linalg.norm(lab[left[:,1],left[:,0]]-lab[right[:,1],right[:,0]],axis=1);support=float(np.mean(delta>22));contrast=float(np.median(delta))
-   if support<.6 or contrast<28:continue
+   if support<(.85 if fabric_recovery else .6) or contrast<28:continue
    # Sleeve edges also have contrast. Require printed border color just INSIDE the line.
    outward=normal if np.dot(normal,projected.mean(0)-center)>0 else -normal
    border_support=0.;blue_support=0.;gold_support=0.
@@ -59,11 +66,16 @@ def _detect(img, blue_sat=75, blue_value=210, perimeter_only=False, band_width=.
    h,sat,val=hsv[xy[:,1],xy[:,0]].T
    outer_blue=float(((h>=85)&(h<=140)&(sat>blue_sat)&(val>20)&(val<blue_value)).mean())
    outer_gold=float(((h>=5)&(h<=45)&(sat>70)&(val>25)).mean())
-   if outer_blue>.35:blue_support=0.
+   # Blue-tinted fabric is not the printed border: require a strong
+   # saturation drop across a supported edge before allowing that exterior.
+   inside_xy=np.rint(projected-outward*max(3,width*.012)).astype(int)
+   inside_sat=hsv[inside_xy[:,1],inside_xy[:,0],1].astype(float)
+   fabric_separation=fabric_recovery and float(np.median(inside_sat))>=100 and float(np.mean(inside_sat-sat.astype(float)>60))>=.8
+   if outer_blue>.35 and not fabric_separation:blue_support=0.
    if outer_gold>.35:gold_support=0.
    border_support=max(blue_support,gold_support)
    if border_support<.6:continue
-   options.append((offset+contrast*.03,p,d,{'support':support,'printed_border_support':border_support,'blue_support':blue_support,'gold_support':gold_support,'median_contrast':contrast,'offset_source_pixels':float(offset/scale)}))
+   options.append(((support*100+border_support*100+contrast*.1-abs(offset)*.1) if fabric_recovery else offset+contrast*.03,p,d,{'support':support,'printed_border_support':border_support,'blue_support':blue_support,'gold_support':gold_support,'median_contrast':contrast,'offset_source_pixels':float(offset/scale)}))
   if not options:return None,{'version':VERSION,'status':'needs_review','reason':'unsupported_side','side':i}
   side_options.append(options)
  families=[]
@@ -97,7 +109,14 @@ def detect(img):
    quad, diagnostics = _detect(img, blue_sat=sat, blue_value=value, perimeter_only=True, band_width=band)
    diagnostics.update(recovery='perimeter_lines_'+profile,band_width=band)
    if quad is not None:return quad, diagnostics
- return quad, diagnostics
+ # Preserve every successful prior result before trying tinted-background recovery.
+ for sat,value in [(75,210),(35,245)]:
+  quad,candidate=_detect(img,blue_sat=sat,blue_value=value,perimeter_only=True,band_width=.42,fabric_recovery=True)
+  if quad is not None:
+   candidate.update(recovery='tinted_background_lines',band_width=.42)
+   return quad,candidate
+ return None, diagnostics
+
 
 def warp(img,quad):
  q=quad.copy()

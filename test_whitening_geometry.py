@@ -25,6 +25,14 @@ class DetectorTests(unittest.TestCase):
  def test_pale_blue_border(self):
   im,q=self.make((150,130,125),[[220,160],[620,160],[620,720],[220,720]])
   result,_=g.detect(im);self.assertIsNotNone(result);self.assertLess(np.linalg.norm(q-result,axis=1).max(),10)
+ def test_blue_tinted_fabric_keeps_true_card_edge(self):
+  im,q=self.make((170,30,20),[[220,160],[620,160],[620,720],[220,720]])
+  gray=np.random.default_rng(17).integers(55,110,im.shape[:2],dtype=np.uint8)
+  texture=np.stack((gray, (gray*.8).astype(np.uint8), (gray*.7).astype(np.uint8)),axis=2)
+  mask=np.zeros(im.shape[:2],np.uint8);cv2.fillConvexPoly(mask,q.astype(int),255);im[mask==0]=texture[mask==0]
+  result,_=g.detect(im);self.assertIsNotNone(result);self.assertLess(np.linalg.norm(q-result,axis=1).max(),10)
+ def test_uniform_blue_background_does_not_create_card(self):
+  self.assertIsNone(g.detect(np.full((700,500,3),(150,70,40),dtype=np.uint8))[0])
  def test_successful_legacy_geometry_is_preserved(self):
   im,q=self.make((150,30,15),[[220,160],[620,160],[620,720],[220,720]])
   before,_=g._detect(im);after,d=g.detect(im)

@@ -90,7 +90,7 @@ jobs:
       - name: Check settings and reference files
         run: python run_cards.py --check
       - name: Check whitening and back-photo handling (offline)
-        run: python -m unittest test_luna_whitening test_back_photo_fallback test_card_runner test_card_review test_whitening_geometry
+        run: python -m unittest test_luna_whitening test_back_photo_fallback test_card_runner test_card_review test_whitening_geometry test_review_corners
       - name: Check review interactions (offline)
         run: node test_card_review_ui.js
       - name: Run selected pipelines
