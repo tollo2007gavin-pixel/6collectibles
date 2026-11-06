@@ -214,11 +214,12 @@ recognized back with insufficient edge evidence can appear as
 `back_photo_found_edges_unconfirmed` in the review. This step runs locally.
 
 The landmark bank in `references/back_landmarks.npz` holds coordinates and SIFT descriptors
-for two back designs. The source files were the aligned `back_1.jpg` images from the October
-20 archive for listings 117476881829 (classic) and 117476782928 (alternate). To reproduce
-the features, remove the 64-pixel pad from the 1500 by 2100 card body, resize the grayscale
+for three back designs. The first two source files were the aligned `back_1.jpg` images from the October
+20 archive for listings 117476881829 (classic) and 117476782928 (alternate). The gold design uses the archived aligned photo
+`257747909612/front_2.jpg`, visually confirmed as a back despite its historical filename. To reproduce
+the features, remove the 64-pixel pad to isolate the 1500 by 2100 card body, resize the grayscale
 body to 360 by 504 with area interpolation, and apply CLAHE (clip limit 2, 8 by 8 tiles).
 Use OpenCV SIFT with 650 features and a mask excluding the outer 27 columns and 32 rows on
-each side. Store keypoint locations as float32 and descriptors as uint8. These two photos
-are excluded from the historical validation sample. Whitening's 16 labeled examples
+each side. Store keypoint locations as float32 and descriptors as uint8. Reference photos
+are excluded from the validation samples. Whitening's 16 labeled examples
 serve a separate purpose and are still used by the whitening model.

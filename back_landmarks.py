@@ -16,7 +16,7 @@ BANK = Path(__file__).parent / "references" / "back_landmarks.npz"
 def reference_features():
     with np.load(BANK, allow_pickle=False) as bank:
         return [(name, bank[name+"_points"], bank[name+"_features"].astype(np.float32))
-                for name in ("classic", "alternate")]
+                for name in ("classic", "alternate", "gold")]
 
 
 def match_artwork(image):
