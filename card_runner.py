@@ -212,9 +212,12 @@ def prepare_back(client, detail, row, audit, s):
         originals = [str(folder / p["original_file"]) for p in manifest["photos"] if p.get("original_file")]
         if not originals:
             return {"ready": False, "reason": "no_readable_listing_photos", "manifest": str(folder / "manifest.json")}
+        reviews = [p.get("boundary_review", {}) for p in manifest["photos"]]
+        reason = ("back_photo_found_edges_unconfirmed" if any(r.get("design") for r in reviews)
+                  else "back_corner_sheet_unavailable")
         return {"ready": False, "card_id": cid, "context": originals,
                 "sheet": None, "tips": None, "input_mode": "sheet_preparation_failed",
-                "reason": "back_corner_sheet_unavailable",
+                "reason": reason,
                 "manifest": str(folder / "manifest.json")}
     photo = max(usable, key=lambda p: p.get("sharpness", 0))
     card = cv2.imread(str(folder / photo["file"]))
@@ -249,7 +252,7 @@ def finish_listing(row, detail, client, audit, s, bank, state, save, *, preparer
     row["back_packet"] = packet
     if s.pipeline == "detection":
         row.update(reason="detection_sheet_ready" if packet["ready"] else packet["reason"],
-                   detection={"method": s.detection_method, "code_sha256": {name: hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in ("card_utils.py", "whitening_geometry.py")}, "sheet_ready": packet["ready"], "selected_original": packet.get("context") if packet["ready"] else None},
+                   detection={"method": s.detection_method, "code_sha256": {name: hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in ("card_utils.py", "whitening_geometry.py", "back_landmarks.py", "references/back_landmarks.npz")}, "sheet_ready": packet["ready"], "selected_original": packet.get("context") if packet["ready"] else None},
                    whitening={"decision": "not_run"})
         return
     if not packet["ready"]:

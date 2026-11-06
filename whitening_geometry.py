@@ -2,7 +2,7 @@
 import cv2
 import numpy as np
 from card_utils import find_card_quad as seed_quad, card_cut_off, CARD_W, CARD_H, PAD
-VERSION='supported-outer-lines-5'
+VERSION='supported-outer-lines-6'
 def _detect(img, blue_sat=75, blue_value=210, perimeter_only=False, band_width=.22, fabric_recovery=False):
  seed=seed_quad(img)
  if seed is None:
@@ -166,37 +166,67 @@ def warp(img,quad):
  dst=np.float32([[PAD,PAD],[PAD+CARD_W-1,PAD],[PAD+CARD_W-1,PAD+CARD_H-1],[PAD,PAD+CARD_H-1]])
  return cv2.warpPerspective(img,cv2.getPerspectiveTransform(q,dst),(CARD_W+2*PAD,CARD_H+2*PAD))
 
+def detect_whitening_back(image, initial_side):
+    """Cross-check the physical outline against the location of recognizable back art."""
+    from card_utils import classify_side
+    from back_landmarks import detect_printed_back, outlines_agree
+
+    artwork_quad, artwork = detect_printed_back(image)
+    diagnostics = {"reason": "initial_front"}
+    if initial_side != "front":
+        quad, diagnostics = detect(image)
+        if quad is not None:
+            side, _ = classify_side(warp(image, quad))
+            blue_edges = all(s.get("blue_support", 0) >= .6 for s in diagnostics["sides"])
+            valid = diagnostics.get("recovery") == "supported_back_contour" or (side == "back" and blue_edges)
+            if valid:
+                if "design" not in artwork:
+                    return quad, diagnostics
+                reference = artwork_quad if artwork_quad is not None else np.float32(artwork["seed_quad"])
+                if outlines_agree(quad, reference):
+                    return quad, diagnostics
+                diagnostics = {"reason": "outline_disagrees_with_print_location"}
+            else:
+                diagnostics = dict(diagnostics, status="needs_review", reason="not_supported_blue_back")
+
+    if "design" in artwork:
+        artwork.update(version=VERSION, previous_reason=diagnostics.get("reason"))
+        if artwork_quad is None:
+            artwork["status"] = "needs_review"
+        return artwork_quad, artwork
+    return None, diagnostics
+
+
 def refine_manifest(card_dir,manifest):
     from pathlib import Path
     import json
     from card_utils import sharpness, classify_side
     card_dir=Path(card_dir)
     for photo in manifest.get('photos',[]):
-        if photo.get('side') not in ('back','unknown') or not photo.get('original_file'):continue
+        if not photo.get('original_file'):continue
         image=cv2.imread(str(card_dir/photo['original_file']))
         if image is None:
             photo['card_found']=False
             photo['boundary_review']={'status':'needs_review','reason':'unreadable_source'}
             continue
-        quad,diagnostics=detect(image)
-        if quad is not None:
-            normalized=warp(image,quad)
-            side,blue=classify_side(normalized)
-            if diagnostics.get('recovery')!='supported_back_contour' and (side!='back' or not all(s.get('blue_support',0)>=.6 for s in diagnostics.get('sides',[]))):
-                quad=None
-                diagnostics={**diagnostics,'status':'needs_review','reason':'not_supported_blue_back'}
-            else:
-                photo['side']='back';photo['blue_ratio']=blue
+        quad,diagnostics=detect_whitening_back(image,photo.get('side'))
+        if diagnostics.get('reason') == 'initial_front':
+            continue
+        if diagnostics.get('design'):
+            photo['side']='back'
         photo['boundary_review']=diagnostics
         photo['card_found']=quad is not None
         if quad is None:
             photo.pop('boundary_overlay',None)
             continue
         normalized=warp(image,quad)
+        photo['side']='back'
+        _,photo['blue_ratio']=classify_side(normalized)
         if not cv2.imwrite(str(card_dir/photo['file']),normalized,[cv2.IMWRITE_JPEG_QUALITY,95]):raise OSError('Could not save normalized card')
         photo['sharpness']=round(sharpness(normalized),1);photo['cut_off']=False
         overlay=image.copy();cv2.polylines(overlay,[quad.astype(int)],True,(0,255,0),4)
         photo['boundary_overlay']='boundary_'+photo['file'];cv2.imwrite(str(card_dir/photo['boundary_overlay']),overlay)
+    manifest['has_front']=any(p.get('side')=='front' for p in manifest.get('photos',[]))
     manifest['has_back']=any(p.get('side')=='back' and p.get('card_found') for p in manifest.get('photos',[]))
     (card_dir/'manifest.json').write_text(json.dumps(manifest,indent=2))
     return manifest

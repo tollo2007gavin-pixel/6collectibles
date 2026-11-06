@@ -205,3 +205,20 @@ length, three or more sides have blue ink support, and the rectified photo has t
 two yellow logo bands and central red ball. At most one shaded side can substitute a strong
 dark-inside/light-outside edge for blue ink. This is a heuristic; extensive holder glare may
 still require manual review. shared_baseline remains available for historical comparisons.
+
+The whitening detector also matches printed-back landmarks on each original photo, including
+photos provisionally tagged as fronts. A match must span the artwork. It predicts where to
+look for the border, then measures a color transition on each of the four sides. An outline
+from the earlier detector is retained when it agrees with this independent location. A
+recognized back with insufficient edge evidence can appear as
+`back_photo_found_edges_unconfirmed` in the review. This step runs locally.
+
+The landmark bank in `references/back_landmarks.npz` holds coordinates and SIFT descriptors
+for two back designs. The source files were the aligned `back_1.jpg` images from the October
+20 archive for listings 117476881829 (classic) and 117476782928 (alternate). To reproduce
+the features, remove the 64-pixel pad from the 1500 by 2100 card body, resize the grayscale
+body to 360 by 504 with area interpolation, and apply CLAHE (clip limit 2, 8 by 8 tiles).
+Use OpenCV SIFT with 650 features and a mask excluding the outer 27 columns and 32 rows on
+each side. Store keypoint locations as float32 and descriptors as uint8. These two photos
+are excluded from the historical validation sample. Whitening's 16 labeled examples
+serve a separate purpose and are still used by the whitening model.
