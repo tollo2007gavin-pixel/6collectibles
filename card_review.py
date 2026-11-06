@@ -30,7 +30,8 @@ def build_batch(out, state, production=False, embed=True):
         contexts = packet.get('context') or []
         if isinstance(contexts, str):
             contexts = [contexts]
-        assets.extend((p, f'Original listing photo {i}') for i, p in enumerate(contexts, 1))
+        selected = local_asset(out, contexts[0]) if packet.get('ready') and len(contexts) == 1 else None
+        assets.extend((p, 'Original back photo selected for sheet' if selected else f'Original listing photo {i}') for i, p in enumerate(contexts, 1))
         if row.get('source'):
             assets.append(('_audit/' + row['source'], 'Original front photo'))
         for key, label in [('sheet', 'Edge and corner sheet'), ('tips', 'Corner close-ups')]:
@@ -41,7 +42,9 @@ def build_batch(out, state, production=False, embed=True):
         manifest = local_asset(out, packet.get('manifest'))
         if manifest:
             for photo in json.loads(manifest.read_text(encoding='utf-8-sig')).get('photos', []):
-                for key, label in [('original_file', 'Original listing photo'), ('boundary_overlay', 'Detected back outline')]:
+                source = local_asset(out, str(manifest.parent / photo['original_file'])) if photo.get('original_file') else None
+                outline = 'Outline used for sheet' if selected and source == selected else f"Other photo preview ({photo.get('side', 'unknown')})"
+                for key, label in [('original_file', 'Original listing photo'), ('boundary_overlay', outline)]:
                     if photo.get(key):
                         assets.append((str(manifest.parent / photo[key]), label))
         images, seen = [], set()
