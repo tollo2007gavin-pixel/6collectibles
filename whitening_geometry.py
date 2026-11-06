@@ -2,7 +2,7 @@
 import cv2
 import numpy as np
 from card_utils import find_card_quad as seed_quad, card_cut_off, CARD_W, CARD_H, PAD
-VERSION='supported-outer-lines-4'
+VERSION='supported-outer-lines-5'
 def _detect(img, blue_sat=75, blue_value=210, perimeter_only=False, band_width=.22, fabric_recovery=False):
  seed=seed_quad(img)
  if seed is None:
@@ -115,8 +115,50 @@ def detect(img):
   if quad is not None:
    candidate.update(recovery='tinted_background_lines',band_width=.42)
    return quad,candidate
+ quad,extra=back_contour_recovery(img)
+ if quad is not None:return quad,extra
  return None, diagnostics
 
+
+def back_contour_recovery(img):
+ """Recover perspective-distorted backs using independently supported physical edges."""
+ from card_utils import _candidates,_order,_refine,classify_side
+ scale=min(1.,800/max(img.shape[:2]));sm=cv2.resize(img,None,fx=scale,fy=scale)
+ lab=cv2.cvtColor(sm,cv2.COLOR_BGR2LAB).astype(float)
+ for contour,method in _candidates(sm):
+  area=cv2.contourArea(contour);rect=cv2.minAreaRect(contour);w,h=rect[1]
+  if min(w,h)<40 or not .1<area/sm.shape[0]/sm.shape[1]<.95 or area/(w*h)<.88 or not 1.2<max(w,h)/min(w,h)<1.65:continue
+  hull=cv2.convexHull(contour);poly=cv2.approxPolyDP(hull,.018*cv2.arcLength(hull,True),True)
+  if len(poly)!=4:continue
+  q=_refine(contour,_order(poly.reshape(4,2).astype(np.float32)))
+  if card_cut_off(sm.shape,q) or not cv2.isContourConvex(q):continue
+  sides=[];center=q.mean(0)
+  for i in range(4):
+   a,b=q[i],q[(i+1)%4];v=b-a;n=np.array([-v[1],v[0]])/np.linalg.norm(v);n*=1 if np.dot(n,center-(a+b)/2)>0 else -1
+   mid=a+np.linspace(.12,.88,48)[:,None]*v
+   delta=max(4,min(w,h)*.018);inside=np.rint(mid+n*delta).astype(int);outside=np.rint(mid-n*delta).astype(int)
+   if any(x[:,0].min()<0 or x[:,1].min()<0 or x[:,0].max()>=sm.shape[1] or x[:,1].max()>=sm.shape[0] for x in (inside,outside)):break
+   inn=tuple(inside.T[::-1]);ext=tuple(outside.T[::-1]);contrast=np.linalg.norm(lab[inn]-lab[ext],axis=1)
+   B,G,R=sm[inn].astype(float).T
+   # Relative blue dominance tolerates neutral lighting changes. A short glare
+   # patch may interrupt the ink, but cannot substitute for a missing side.
+   ink=(B>G*1.04)&(B>R*1.08)&(B>18)
+   shadow=ink.mean()<.6 and np.median(contrast)>65 and np.median(sm[ext].astype(float).mean(axis=1)-sm[inn].astype(float).mean(axis=1))>55
+   if (ink.mean()<.6 and not shadow) or min((part>20).mean() for part in np.array_split(contrast,3))<.65:break
+   sides.append(dict(shadow=bool(shadow),blue_support=float(ink.mean()),median_contrast=float(np.median(contrast))))
+  if len(sides)==4 and sum(x['shadow'] for x in sides)<=1 and back_print(warp(img,q/scale)):
+   return q/scale,dict(version=VERSION,status='ready',quad=(q/scale).tolist(),sides=sides,recovery='supported_back_contour',candidate=method)
+ return None,{}
+
+
+def back_print(card):
+ # Two yellow logo bands and the central red ball on the upright Pokemon back.
+ body=card[PAD:PAD+CARD_H,PAD:PAD+CARD_W]
+ hsv=cv2.cvtColor(cv2.resize(body,(100,140)),cv2.COLOR_BGR2HSV)
+ h,s,v=hsv.transpose(2,0,1)
+ yellow=(h>=12)&(h<=45)&(s>85)&(v>60)
+ red=((h<13)|(h>170))&(s>70)&(v>50)
+ return min(yellow[9:36,8:92].mean(),yellow[104:131,8:92].mean())>.08 and red[47:93,23:77].mean()>.05
 
 def warp(img,quad):
  q=quad.copy()
@@ -140,7 +182,7 @@ def refine_manifest(card_dir,manifest):
         if quad is not None:
             normalized=warp(image,quad)
             side,blue=classify_side(normalized)
-            if side!='back' or not all(s.get('blue_support',0)>=.6 for s in diagnostics.get('sides',[])):
+            if diagnostics.get('recovery')!='supported_back_contour' and (side!='back' or not all(s.get('blue_support',0)>=.6 for s in diagnostics.get('sides',[]))):
                 quad=None
                 diagnostics={**diagnostics,'status':'needs_review','reason':'not_supported_blue_back'}
             else:

@@ -33,7 +33,7 @@ class DetectionTests(unittest.TestCase):
             client=Mock();client.download.return_value=raw
             row=dict(item_id='v1|123|0',card_id='22',border_type='yellow',title='Test',image_url='test',url='')
             with patch('whitening_geometry.detect',side_effect=AssertionError('Wrong detector')):
-                packet=r.prepare_back(client,{},row,audit,r.Settings(pipeline='detection'))
+                packet=r.prepare_back(client,{},row,audit,r.Settings(pipeline='detection',detection_method='shared_baseline'))
             self.assertTrue(packet['ready'])
             self.assertTrue(Path(packet['sheet']).is_file())
             manifest=json.loads(Path(packet['manifest']).read_text())

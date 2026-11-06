@@ -198,3 +198,10 @@ Detection mode always retains every processed listing, ignores centering accepta
 Download the new card-results artifact and open **review.html**. Review the selected original, detected outlines, sheets and other originals. Answer **Did it select a suitable back photo?** and **Does the outline follow the physical card edges?** separately, then add notes. Save reviewed HTML or export JSON; JSON contains detection answer counts and preparation timings. Human accuracy figures require completed reviews.
 
 A replay starts a new output batch, retains listing IDs, and tests the downloaded originals. It does not overwrite the earlier artifact. Older runs missing saved originals stop with an explanation. GitHub artifacts expire after their retention period (currently 14 days).
+
+Detection tests default to validated_whitening. When the existing back outline checks fail,
+a perspective contour may qualify if all four physical edges have contrast along their
+length, three or more sides have blue ink support, and the rectified photo has the expected
+two yellow logo bands and central red ball. At most one shaded side can substitute a strong
+dark-inside/light-outside edge for blue ink. This is a heuristic; extensive holder glare may
+still require manual review. shared_baseline remains available for historical comparisons.

@@ -16,8 +16,8 @@ on:
       detection_method:
         description: 'Detection tests only: shared_baseline = existing shared detector; validated_whitening = stricter current checks'
         type: choice
-        options: [shared_baseline, validated_whitening]
-        default: shared_baseline
+        options: [validated_whitening, shared_baseline]
+        default: validated_whitening
       replay_run_id:
         description: 'Detection only: previous GitHub run ID to reuse saved originals; blank = new eBay listings'
         type: string

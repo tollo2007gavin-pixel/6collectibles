@@ -32,7 +32,7 @@ from yellow_batch_engine.measurement_screening import screen_axis
 @dataclass
 class Settings:
     pipeline: str = "both"
-    detection_method: str = "shared_baseline"
+    detection_method: str = "validated_whitening"
     replay_folder: str = ""
     border_type: str = "yellow"
     output_mode: str = "testing"
