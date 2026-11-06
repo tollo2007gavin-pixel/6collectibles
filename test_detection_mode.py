@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 import cv2
 import numpy as np
 import card_runner as r
+from card_utils import CARD_W,CARD_H,PAD,classify_side
 from detection_replay import candidates, workflow_inputs
 
 
@@ -43,6 +44,15 @@ class DetectionTests(unittest.TestCase):
             replay=list(candidates(out))
             self.assertEqual(replay[0][0]['item_id'],row['item_id'])
             self.assertEqual(Path(replay[0][1]['image']['imageUrl']).read_bytes(),raw)
+
+    def test_front_with_blue_artwork_cannot_be_called_a_back(self):
+        image=np.full((CARD_H+2*PAD,CARD_W+2*PAD,3),(150,30,15),np.uint8)
+        image[PAD+70:CARD_H+PAD-70,PAD+10:PAD+90]=(20,190,230)
+        side,ratio=classify_side(image)
+        self.assertGreater(ratio,.45)
+        self.assertNotEqual(side,'back')
+        back=np.full_like(image,(150,30,15))
+        self.assertEqual(classify_side(back)[0],'back')
 
     def test_workflow_mapping(self):
         self.assertEqual(workflow_inputs({'pipeline':'detection','replay_run_id':'123'})['replay_folder'],'replay_batch')

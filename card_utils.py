@@ -321,7 +321,14 @@ def classify_side(card: np.ndarray) -> tuple[str, float]:
     hsv = cv2.cvtColor(card, cv2.COLOR_BGR2HSV)
     blue = (hsv[..., 0] >= 90) & (hsv[..., 0] <= 138) & (hsv[..., 1] > 30) & (hsv[..., 2] > 25)
     ratio = float(blue[_border_band(card)].mean())
-    side = "back" if ratio > 0.45 else "front" if ratio < 0.20 else "unknown"
+    pad, cw = _geom(card)
+    near, far = pad + int(cw * .012), pad + int(cw * .06)
+    h, w = blue.shape
+    sides = (blue[near:far, near:w-near], blue[near:h-near, w-far:w-near],
+             blue[h-far:h-near, near:w-near], blue[near:h-near, near:far])
+    # Blue artwork on a front can raise the mean above .45. A genuine back
+    # has blue border ink along all four sides of the physical card.
+    side = "back" if ratio > .45 and all(float(b.mean()) >= .45 for b in sides) else "front" if ratio < .20 else "unknown"
     return side, round(ratio, 3)
 
 
