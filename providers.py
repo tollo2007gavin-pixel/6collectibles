@@ -84,17 +84,29 @@ def redact_error(text):
             text = text.replace(value, '[REDACTED]')
     return re.sub(r'(?i)(sk-[\w*.-]+|Bearer\s+\S+)', '[REDACTED]', text)
 
-
 def _post(url, body, headers):
-    try:
-        r = requests.post(url, json=body, timeout=120, headers=headers)
-    except requests.RequestException as e:
-        raise APIError(redact_error(e)) from None
-    if not r.ok:
-        # Include the provider's own explanation, not just the status code.
-        raise APIError(f"{r.status_code}: {redact_error(r.text)[:400]}")
-    return r.json()
-
+    import time
+    max_retries = 3
+    retry_delay = 2  # seconds
+    
+    for attempt in range(max_retries):
+        try:
+            r = requests.post(url, json=body, timeout=120, headers=headers)
+        except requests.RequestException as e:
+            if attempt == max_retries - 1:
+                raise APIError(redact_error(e)) from None
+            time.sleep(retry_delay * (attempt + 1))
+            continue
+        
+        # If OpenAI returns an HTTP 500 (or other 5xx server errors), reattempt the request
+        if r.status_code in (500, 502, 503, 504):
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay * (attempt + 1))
+                continue
+                
+        if not r.ok:
+            raise APIError(f"{r.status_code}: {redact_error(r.text)[:400]}")
+        return r.json()
 
 # Which optional OpenAI features this model accepted; learned on the first call.
 _openai_features = {}
