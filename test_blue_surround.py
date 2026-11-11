@@ -39,15 +39,13 @@ class SurroundTests(unittest.TestCase):
         self.assertEqual(b['radius_pixels'], a['radius_pixels']*2)
         self.assertEqual(a['blue_fraction'], b['blue_fraction'])
 
-    def test_filter_integration_and_large_exception(self):
+    def test_large_spots_have_no_bypass(self):
         sheet=np.full((1050,1010,3),(140,45,20),np.uint8)
         cv2.rectangle(sheet,(200,220),(203,223),(240,240,240),-1)
         cv2.rectangle(sheet,(300,320),(313,333),(240,240,240),-1)
         result,_=inspect(sheet,.8,.02)
-        self.assertEqual(len(result['excluded_candidates']),1)
-        self.assertEqual(result['candidate_count'],1)
-        self.assertEqual(result['candidates'][0]['retained_by'],'large_mark_exception')
-        self.assertEqual(result['candidates'][0]['reason_code'],'L')
+        self.assertEqual(len(result['excluded_candidates']),2)
+        self.assertEqual(result['candidate_count'],0)
         self.assertEqual(result['excluded_candidates'][0]['reason_code'],'R')
         triangle,_=inspect(sheet,.6,.02,'triangle')
         self.assertEqual(triangle['excluded_candidates'][0]['reason_code'],'T')

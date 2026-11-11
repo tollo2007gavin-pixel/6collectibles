@@ -27,11 +27,11 @@ def main():
         for threshold in [.70,.75,.80,.85,.90]:
             def excluded(c):
                 r=c['surrounding_blue']
-                return (c['area_at_500px']<100 and r['complete_ring'] and
+                return (r['complete_ring'] and
                         r['blue_fraction']>=threshold and r['minimum_sector_blue_fraction']>=.35)
             removed=[c for c in candidates if excluded(c)]
             anchors=[dict(card=c['card'],id=c['id'],removed=excluded(c),
-                          protected_by_size=c['area_at_500px']>=100,
+                          protected_by_size=False,
                           **c['surrounding_blue']) for c in candidates
                      if (c['card']==4 and c['id'] in [1,2,3]) or (c['card']==5 and c['id']==17)]
             summary.append(dict(radius_fraction=radius,threshold=threshold,total=len(candidates),

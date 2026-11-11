@@ -25,28 +25,25 @@ class CornerInspectionTests(unittest.TestCase):
         sheet = self.sheet()
         cv2.rectangle(sheet, (150, 60), (162, 72), (240, 240, 240), -1)
         original = sheet.copy()
-        result, overlay = inspect(sheet)
+        result, overlay = inspect(sheet,1.1)
         self.assertGreater(result['candidate_count'], 0)
         self.assertTrue(all(c['corner']=='TR' for c in result['candidates']))
         np.testing.assert_array_equal(sheet, original)
         self.assertEqual(overlay.shape, sheet.shape)
-        self.assertEqual(result, inspect(sheet)[0])
+        self.assertEqual(result, inspect(sheet,1.1)[0])
 
     def test_unrecognized_layout_is_rejected(self):
         with self.assertRaises(ValueError):
             inspect(np.zeros((600, 800, 3), np.uint8))
 
-    def test_only_large_interior_spots_survive_exception(self):
+    def test_large_interior_spots_do_not_bypass_boundary(self):
         sheet = np.zeros((1050, 1010, 3), np.uint8)
         for _, _, _, crop in corner_tiles(sheet):
             crop[:] = (140, 45, 20)
         cv2.rectangle(sheet, (200, 220), (203, 223), (240,240,240), -1)
         cv2.rectangle(sheet, (300, 320), (313, 333), (240,240,240), -1)
         result, _ = inspect(sheet)
-        self.assertEqual(len(result['candidates']), 1)
-        candidate = result['candidates'][0]
-        self.assertEqual(candidate['retained_by'], 'large_interior_mark_exception')
-        self.assertGreaterEqual(candidate['area_at_500px'], 100)
+        self.assertEqual(len(result['candidates']), 0)
 
     def test_band_reflects_with_corner_orientation(self):
         crop = np.zeros((500, 500, 3), np.uint8)

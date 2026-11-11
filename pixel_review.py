@@ -20,7 +20,6 @@ def main():
     parser.add_argument('--surround-threshold', type=float)
     parser.add_argument('--radius-fraction', type=float, default=.02)
     parser.add_argument('--geometry', choices=['ring','triangle','square','circle'], default='ring')
-    parser.add_argument('--no-large-exception', action='store_true')
     parser.add_argument('--grain-filter', action='store_true')
     args = parser.parse_args()
     out = Path(args.out)
@@ -38,13 +37,12 @@ def main():
         raw = base64.b64decode(source['src'].split(',', 1)[1], validate=True)
         image = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
         result, overlay = inspect(image, args.surround_threshold, args.radius_fraction, args.geometry,
-                                  not args.no_large_exception, args.grain_filter)
+                                  grain_filter=args.grain_filter)
         if args.surround_threshold is not None:
             result['band_calibration'] = 'Not used; local blue geometry filter replaces boundary filter'
             result['surrounding_blue_settings'] = dict(threshold=args.surround_threshold,
                 radius_fraction=args.radius_fraction, geometry=args.geometry,
-                minimum_sector_blue_fraction=.35 if args.geometry=='ring' else None,
-                large_exception_area_at_500px=None if args.no_large_exception else 100)
+                minimum_sector_blue_fraction=.35 if args.geometry=='ring' else None)
         result.update(number=card['number'], listing=card['id'], human_review=answers.get(card['id'], {}),
                       prior_decision=card['pipeline_decision']['whitening'],
                       source_file=source['file'], source_sha256=hashlib.sha256(raw).hexdigest())
@@ -70,11 +68,11 @@ def main():
             'pre{white-space:pre-wrap}</style><h1>Four-corner pixel inspection</h1>'
             '<p>These are the exact corner close-ups saved by the sheet-making pipeline. Red boxes identify '
             'retained candidates. Labels: T = triangle exclusion, S = square exclusion, C = circle exclusion, '
-            'R = ring exclusion, L = retained by the large-mark exception. G = excluded as a weak small '
+            'R = ring exclusion. G = excluded as a weak small '
             'spot in a locally noisy blue area. A number without a letter is retained without an exception. Red boxes identify '
             'local light spots near blue pixels. Cyan shows the inner boundary measured separately on each corner: '
             '2.4% of crop width inward. There is no outer cutoff. '
-            'Larger interior marks can be retained by exception. Candidate numbers match the prior unfiltered review. '
+            'No large-spot exception is applied. Candidate numbers match the prior unfiltered review. '
             'A spot may be damage, glare, dust, or background. '
             'Numbers link to measurements below each card. All findings require review; an unmarked corner '
             'has not been certified clean.</p>'
@@ -91,28 +89,25 @@ def main():
         (out/'review.html').write_text(page, encoding='utf-8')
         if args.geometry in ('triangle','square','circle'):
             start=page.index('No outline filter is used.')
-            end=page.index('Larger interior marks',start)
+            end=page.index('No large-spot exception',start)
             page=page[:start]+(
                 f'Cyan triangles have their tip at each candidate pixel centroid and their base toward '
                 f'the corner (TR 45°, TL 135°, BL 225°, BR 315°; standard math angles). '
                 f'Tip-to-base distance: {args.radius_fraction:.1%} of crop width. '
                 f'Candidates with at least {args.surround_threshold:.0%} blue inside the triangle are excluded '
-                'unless protected by the large-mark exception. Candidate pixels are included in the measurement. '
+                'regardless of candidate size. Candidate pixels are included in the measurement. '
                 'Triangles crossing the crop boundary are retained. No ring or directional-sector rule is used. '
                 'Green boxes: excluded; red boxes: retained. ')+page[end:]
             (out/'review.html').write_text(page,encoding='utf-8')
         if args.geometry in ('square','circle'):
             start=page.index('Cyan triangles')
-            end=page.index('Larger interior marks',start)
+            end=page.index('No large-spot exception',start)
             label='side length' if args.geometry=='square' else 'diameter'
             page=page[:start]+(f'Cyan {args.geometry}s are centered on each candidate pixel centroid. '
                 f'{label}: {args.radius_fraction:.1%} of crop width. '
                 f'Exclude when at least {args.surround_threshold:.0%} of pixels inside the shape are blue. '
                 'Candidate pixels count in the measurement. Incomplete shapes are retained. '
                 'No outline or directional-sector filter is used. Green: excluded; red: retained. ')+page[end:]
-        if args.no_large_exception:
-            page=page.replace('unless protected by the large-mark exception.', '(large-mark exception disabled).')
-            page=page.replace('Larger interior marks can be retained by exception.', 'Large-mark exception disabled.')
         (out/'review.html').write_text(page,encoding='utf-8')
 
 

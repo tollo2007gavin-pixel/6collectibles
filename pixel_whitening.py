@@ -147,7 +147,7 @@ def grain_measurement(component, light_residual, saturation_loss, blue_reference
     return result
 
 
-def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring', large_exception=True, grain_filter=False):
+def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring', grain_filter=False):
     """Mark light spots using each crop's measured blue silhouette; require review."""
     tiles = corner_tiles(sheet)
     overlay = sheet.copy()
@@ -212,7 +212,7 @@ def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring'
                     enclosed = (ring_metrics['complete_ring'] and
                                 ring_metrics['blue_fraction'] >= surround_threshold and
                                 ring_metrics['minimum_sector_blue_fraction'] >= .35)
-                if enclosed and (not large_exception or scaled_area < 100):
+                if enclosed:
                     code = {'triangle':'T', 'square':'S', 'circle':'C', 'ring':'R'}[geometry]
                     excluded_candidates.append(dict(id=source_candidate_id, corner=name,
                         reason_code=code, display_label=f'{source_candidate_id}{code}',
@@ -223,15 +223,13 @@ def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring'
                     cv2.putText(view, f'{source_candidate_id}{code}', (x,max(12,y-3)),
                                 cv2.FONT_HERSHEY_SIMPLEX,.4,(0,180,0),1)
                     continue
-                retained_by = 'large_mark_exception' if enclosed else 'not_enclosed_by_blue'
+                retained_by = 'not_enclosed_by_blue'
             elif overlap >= area*.5:
                 retained_by = 'outside_inner_boundary'
-            elif scaled_area >= 100 and (interior_overlap >= area*.5 or overlap > 0):
-                retained_by = 'large_interior_mark_exception'
             else:
                 continue
             candidate_id = source_candidate_id
-            code = 'L' if retained_by in ('large_mark_exception','large_interior_mark_exception') else ''
+            code = ''
             ids.append(candidate_id)
             candidates.append(dict(id=candidate_id, corner=name, category='light_spot_candidate',
                                    reason_code=code, display_label=f'{candidate_id}{code}',
@@ -254,7 +252,6 @@ def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring'
                 grain_filter_enabled=grain_filter,
                 input_mode='existing_corner_tip_sheet', measurement_image_size=[sheet.shape[1], sheet.shape[0]],
                 band_calibration='Each crop measured independently; inner cutoff 2.4% of tile width; no outer cutoff',
-                large_interior_min_area_at_500px=100,
                 limitations=['Light spots may be glare, dust, background or damage',
                              'Enlarged sheet pixels are not independent original-photo pixels',
                              'No automatic clean or damaged verdict', 'Folds are not measured']), overlay

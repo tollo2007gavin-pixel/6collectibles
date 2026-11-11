@@ -18,10 +18,6 @@ on:
         type: choice
         options: ['40', '50', '60', '70', '75', '80', '85', '90', '95']
         default: '60'
-      large_damage_exception:
-        description: 'Keep large marks even if they reach the blue threshold'
-        type: boolean
-        default: true
       grain_filter:
         description: 'Filter weak small spots using local blue noise before geometry (G labels)'
         type: boolean

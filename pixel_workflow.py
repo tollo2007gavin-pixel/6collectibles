@@ -31,19 +31,16 @@ def settings(inputs):
     border = inputs.get('border_type','yellow')
     if border not in {'yellow','gx','all'}:
         raise ValueError('Unknown border design')
-    large = inputs.get('large_damage_exception',True)
     grain = inputs.get('grain_filter',True)
     if type(grain) is not bool:
         raise ValueError('Grain filter must be a boolean')
-    if type(large) is not bool:
-        raise ValueError('Large damage exception must be a boolean')
     ids = json.loads(inputs.get('card_ids','[]'))
     if not isinstance(ids,list) or any(not isinstance(x,str) for x in ids):
         raise ValueError('Card IDs must be a JSON list of strings')
     # UI gives an actual triangle side length, not its altitude.
     fraction = size/500 * (math.sqrt(3)/2 if shape=='triangle' else 1)
     return dict(geometry=shape,size_pixels_at_500=size,blue_threshold=percentage/100,
-                measurement_fraction=fraction,large_damage_exception=large,grain_filter=grain,
+                measurement_fraction=fraction,grain_filter=grain,
                 replay_run_id=replay,max_listings=count,border_type=border,card_ids=ids)
 
 
@@ -87,8 +84,6 @@ def main():
     command=[sys.executable,str(ROOT/'pixel_review.py'),str(source_html),'--out',str(output/'candidate_review'),
              '--surround-threshold',str(config['blue_threshold']),
              '--radius-fraction',str(config['measurement_fraction']),'--geometry',config['geometry']]
-    if not config['large_damage_exception']:
-        command.append('--no-large-exception')
     if config['grain_filter']:
         command.append('--grain-filter')
     subprocess.run(command,cwd=ROOT,check=True)
