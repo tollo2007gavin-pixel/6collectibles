@@ -22,6 +22,10 @@ on:
         description: 'Keep large marks even if they reach the blue threshold'
         type: boolean
         default: true
+      grain_filter:
+        description: 'Filter weak small spots using local blue noise before geometry (G labels)'
+        type: boolean
+        default: true
       replay_run_id:
         description: 'Previous card-results GitHub RUN ID: reuse saved sheets; blank = new eBay batch'
         type: string
@@ -66,7 +70,7 @@ jobs:
       - name: Validate options and test candidate evaluation offline
         run: |
           python -c "import os,json; from pixel_workflow import settings; settings(json.loads(os.environ['PIXEL_TEST_INPUTS']))"
-          python -m unittest test_pixel_whitening test_blue_surround test_triangle_blue test_pixel_workflow test_detection_mode
+          python -m unittest test_pixel_whitening test_blue_surround test_triangle_blue test_pixel_workflow test_detection_mode test_grain_filter
       - name: Download previous photos and sheets
         if: ${{ inputs.replay_run_id != '' }}
         uses: actions/download-artifact@v4

@@ -118,7 +118,36 @@ def triangle_blue(component, hsv, corner, altitude_fraction=.02, shape='triangle
                 blue_fraction=float(blue[region].mean()) if region.any() else 0.0)
 
 
-def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring', large_exception=True):
+def grain_measurement(component, light_residual, saturation_loss, blue_reference):
+    """Conservative local noise test; insufficient/unstable reference never rejects."""
+    ys,xs=np.where(component)
+    radius=max(8,round(component.shape[0]*.08))
+    y0,y1=max(0,ys.min()-radius),min(component.shape[0],ys.max()+radius+1)
+    x0,x1=max(0,xs.min()-radius),min(component.shape[1],xs.max()+radius+1)
+    excluded=cv2.dilate(component.astype(np.uint8),np.ones((5,5),np.uint8)).astype(bool)
+    reference=(blue_reference & ~excluded)[y0:y1,x0:x1]
+    values=light_residual[y0:y1,x0:x1][reference]
+    result=dict(reference_pixels=int(values.size),status='insufficient_reference',exclude=False)
+    if values.size<100:
+        return result
+    median=float(np.median(values))
+    noise=1.4826*float(np.median(np.abs(values-median)))
+    result.update(noise_sigma=noise,reference_median=median)
+    if noise>18:
+        result['status']='unstable_reference'
+        return result
+    contrast=float(np.percentile(light_residual[component]-median,75))
+    loss=float(np.percentile(saturation_loss[component],75))
+    area=component.sum()*(500/component.shape[0])**2
+    # Only small, weak patches in measurably noisy neighborhoods are removed.
+    threshold=min(30.,max(13.,3.*noise))
+    reject=bool(noise>=4 and area<40 and contrast<threshold and loss<30)
+    result.update(status='measured',exclude=reject,contrast_p75=contrast,
+                  saturation_loss_p75=loss,contrast_threshold=threshold,area_at_500px=float(area))
+    return result
+
+
+def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring', large_exception=True, grain_filter=False):
     """Mark light spots using each crop's measured blue silhouette; require review."""
     tiles = corner_tiles(sheet)
     overlay = sheet.copy()
@@ -155,6 +184,16 @@ def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring'
             overlap = int(np.count_nonzero(component & band))
             interior_overlap = int(np.count_nonzero(component & interior))
             scaled_area = area * (500/crop.shape[0])**2
+            grain = grain_measurement(component, light-baseline, sat_baseline-saturation,
+                                      blue & interior) if grain_filter else {'status':'disabled','exclude':False}
+            if grain['exclude']:
+                excluded_candidates.append(dict(id=source_candidate_id,corner=name,reason_code='G',
+                    display_label=f'{source_candidate_id}G',reason='local_grain',grain=grain,
+                    area_at_500px=scaled_area,box_in_corner=[x,y,width,height]))
+                cv2.rectangle(view,(x,y),(x+width,y+height),(0,180,0),1)
+                cv2.putText(view,f'{source_candidate_id}G',(x,max(12,y-3)),
+                            cv2.FONT_HERSHEY_SIMPLEX,.4,(0,180,0),1)
+                continue
             ring_metrics = {}
             if surround_threshold is not None:
                 if geometry in ('triangle','square','circle'):
@@ -177,6 +216,7 @@ def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring'
                     code = {'triangle':'T', 'square':'S', 'circle':'C', 'ring':'R'}[geometry]
                     excluded_candidates.append(dict(id=source_candidate_id, corner=name,
                         reason_code=code, display_label=f'{source_candidate_id}{code}',
+                        grain=grain,
                         area_at_500px=scaled_area, surrounding_blue=ring_metrics,
                         box_in_corner=[x,y,width,height], reason='surrounded_by_blue'))
                     cv2.rectangle(view, (x,y), (x+width,y+height), (0,180,0), 1)
@@ -195,6 +235,7 @@ def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring'
             ids.append(candidate_id)
             candidates.append(dict(id=candidate_id, corner=name, category='light_spot_candidate',
                                    reason_code=code, display_label=f'{candidate_id}{code}',
+                                   grain=grain,
                                    surrounding_blue=ring_metrics,
                                    retained_by=retained_by, area_at_500px=round(scaled_area, 2),
                                    fraction_in_band=round(overlap/area, 3),
@@ -210,6 +251,7 @@ def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring'
                             candidate_ids=ids, boundary_status='measured' if band.any() else 'unconfirmed'))
     return dict(status='needs_review', candidate_count=len(candidates), candidates=candidates, corners=corners,
                 excluded_candidates=excluded_candidates,
+                grain_filter_enabled=grain_filter,
                 input_mode='existing_corner_tip_sheet', measurement_image_size=[sheet.shape[1], sheet.shape[0]],
                 band_calibration='Each crop measured independently; inner cutoff 2.4% of tile width; no outer cutoff',
                 large_interior_min_area_at_500px=100,

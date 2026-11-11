@@ -21,6 +21,7 @@ def main():
     parser.add_argument('--radius-fraction', type=float, default=.02)
     parser.add_argument('--geometry', choices=['ring','triangle','square','circle'], default='ring')
     parser.add_argument('--no-large-exception', action='store_true')
+    parser.add_argument('--grain-filter', action='store_true')
     args = parser.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=False)
@@ -37,7 +38,7 @@ def main():
         raw = base64.b64decode(source['src'].split(',', 1)[1], validate=True)
         image = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
         result, overlay = inspect(image, args.surround_threshold, args.radius_fraction, args.geometry,
-                                  not args.no_large_exception)
+                                  not args.no_large_exception, args.grain_filter)
         if args.surround_threshold is not None:
             result['band_calibration'] = 'Not used; local blue geometry filter replaces boundary filter'
             result['surrounding_blue_settings'] = dict(threshold=args.surround_threshold,
@@ -69,8 +70,8 @@ def main():
             'pre{white-space:pre-wrap}</style><h1>Four-corner pixel inspection</h1>'
             '<p>These are the exact corner close-ups saved by the sheet-making pipeline. Red boxes identify '
             'retained candidates. Labels: T = triangle exclusion, S = square exclusion, C = circle exclusion, '
-            'R = ring exclusion, L = retained by the large-mark exception. G is reserved for a future grain filter '
-            'and is not assigned. A number without a letter is retained without an exception. Red boxes identify '
+            'R = ring exclusion, L = retained by the large-mark exception. G = excluded as a weak small '
+            'spot in a locally noisy blue area. A number without a letter is retained without an exception. Red boxes identify '
             'local light spots near blue pixels. Cyan shows the inner boundary measured separately on each corner: '
             '2.4% of crop width inward. There is no outer cutoff. '
             'Larger interior marks can be retained by exception. Candidate numbers match the prior unfiltered review. '

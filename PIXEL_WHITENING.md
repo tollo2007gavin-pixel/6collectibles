@@ -1,5 +1,9 @@
 # Experimental four-corner inspection
 
+Optional grain filtering (`--grain-filter`) runs before geometry, preserving original candidate IDs and recording G exclusions. It estimates local brightness-residual noise using median absolute deviation in nearby blue pixels within the estimated card interior, excluding each candidate and a small margin. This is not a full validated segmentation of the area between the outer card edge and the interior artwork rectangle. Border/artwork contamination remains possible.
+
+The conservative initial rule requires at least 100 reference pixels, noise sigma between 4 and 18, candidate area below 40 normalized pixels, 75th-percentile brightness residual below a noise-dependent threshold (13–30), and 75th-percentile saturation loss below 30. Large or strongly contrasting marks survive. Insufficient or unstable reference skips grain rejection; overall output remains needs_review. Glare classification and damage accuracy are not established by this rule. Compare G labels against human-reviewed chips before increasing its strength.
+
 Run `python pixel_review.py "reviewed.html" --out "new-output-folder"` to inspect the saved Corner close-ups images in a portable reviewed HTML. The output folder must be new. Outputs include an embedded comparison gallery, annotated sheets, and JSON measurements. It uses no model calls.
 
 The input is the exact existing 2 by 2 corner-tip sheet made by `card_utils.corner_closeup_sheet`. Its four tiles are read without resizing, warping, or running the card detector. Captions and separators are excluded. Source hashes and per-corner coordinates are recorded. A card with no saved corner sheet is explicitly skipped. Unknown layouts raise an error.
