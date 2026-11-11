@@ -174,11 +174,13 @@ def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring'
                                 ring_metrics['blue_fraction'] >= surround_threshold and
                                 ring_metrics['minimum_sector_blue_fraction'] >= .35)
                 if enclosed and (not large_exception or scaled_area < 100):
+                    code = {'triangle':'T', 'square':'S', 'circle':'C', 'ring':'R'}[geometry]
                     excluded_candidates.append(dict(id=source_candidate_id, corner=name,
+                        reason_code=code, display_label=f'{source_candidate_id}{code}',
                         area_at_500px=scaled_area, surrounding_blue=ring_metrics,
                         box_in_corner=[x,y,width,height], reason='surrounded_by_blue'))
                     cv2.rectangle(view, (x,y), (x+width,y+height), (0,180,0), 1)
-                    cv2.putText(view, str(source_candidate_id), (x,max(12,y-3)),
+                    cv2.putText(view, f'{source_candidate_id}{code}', (x,max(12,y-3)),
                                 cv2.FONT_HERSHEY_SIMPLEX,.4,(0,180,0),1)
                     continue
                 retained_by = 'large_mark_exception' if enclosed else 'not_enclosed_by_blue'
@@ -189,8 +191,10 @@ def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring'
             else:
                 continue
             candidate_id = source_candidate_id
+            code = 'L' if retained_by in ('large_mark_exception','large_interior_mark_exception') else ''
             ids.append(candidate_id)
             candidates.append(dict(id=candidate_id, corner=name, category='light_spot_candidate',
+                                   reason_code=code, display_label=f'{candidate_id}{code}',
                                    surrounding_blue=ring_metrics,
                                    retained_by=retained_by, area_at_500px=round(scaled_area, 2),
                                    fraction_in_band=round(overlap/area, 3),
@@ -200,7 +204,7 @@ def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring'
             view = overlay[offset_y:offset_y+crop.shape[0], offset_x:offset_x+crop.shape[1]]
             cv2.rectangle(view, (max(0, x-2), max(0, y-2)),
                           (min(crop.shape[1]-1, x+width+2), min(crop.shape[0]-1, y+height+2)), (0, 0, 255), 1)
-            cv2.putText(view, str(candidate_id), (max(0, x-2), max(12, y-3)),
+            cv2.putText(view, f'{candidate_id}{code}', (max(0, x-2), max(12, y-3)),
                         cv2.FONT_HERSHEY_SIMPLEX, .4, (0, 0, 255), 1)
         corners.append(dict(corner=name, source_box=[offset_x, offset_y, crop.shape[1], crop.shape[0]],
                             candidate_ids=ids, boundary_status='measured' if band.any() else 'unconfirmed'))

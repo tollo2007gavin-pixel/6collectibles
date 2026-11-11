@@ -47,6 +47,11 @@ class SurroundTests(unittest.TestCase):
         self.assertEqual(len(result['excluded_candidates']),1)
         self.assertEqual(result['candidate_count'],1)
         self.assertEqual(result['candidates'][0]['retained_by'],'large_mark_exception')
+        self.assertEqual(result['candidates'][0]['reason_code'],'L')
+        self.assertEqual(result['excluded_candidates'][0]['reason_code'],'R')
+        triangle,_=inspect(sheet,.6,.02,'triangle')
+        self.assertEqual(triangle['excluded_candidates'][0]['reason_code'],'T')
+        self.assertTrue(triangle['excluded_candidates'][0]['display_label'].endswith('T'))
 
 if __name__ == '__main__':
     unittest.main()
