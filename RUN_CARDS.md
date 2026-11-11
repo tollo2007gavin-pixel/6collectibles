@@ -223,3 +223,19 @@ Use OpenCV SIFT with 650 features and a mask excluding the outer 27 columns and 
 each side. Store keypoint locations as float32 and descriptors as uint8. Reference photos
 are excluded from the validation samples. Whitening's 16 labeled examples
 serve a separate purpose and are still used by the whitening model.
+# Pixel candidate tests (separate from API whitening)
+
+In GitHub **Actions → Test pixel whitening candidates → Run workflow**, select:
+
+- **geometry:** triangle, square, circle, or perimeter ring.
+- **size_pixels:** triangle/square side length, circle diameter, or ring width, normalized to a 500-pixel corner crop. Default triangle side 12 px gives about 10.4 px tip-to-base distance.
+- **blue_percentage:** exclusion threshold (default 60%, allowing 40% non-blue).
+- **large_damage_exception:** preserve candidates of at least 100 normalized pixels even when they meet the exclusion threshold (default enabled).
+- **replay_run_id:** paste the numeric ID from a previous Actions run URL to compare settings on saved sheets. Leave blank to fetch a new eBay batch and prepare sheets with the validated detector.
+- **max_listings**, **border_type**, and **card_ids:** control the batch. Replay evaluates up to max_listings saved records in original order; border/card search filters only apply to new batches.
+
+Triangle tips are at candidate pixel centroids, with bases pointing toward each named corner: TR 45°, TL 135°, BL 225°, BR 315° in standard mathematical angles. Squares and circles are centered on candidates. Triangle/square/circle percentages include candidate pixels inside the shape. Rings surround the candidate perimeter and also require at least 35% blue in each of eight directions. Shapes cut off by the image remain eligible. A missing sheet is reported, never treated as clean.
+
+Download **card-results-pixel-N**, extract it, and open **candidate_review/review.html** inside the run folder. Red marks are retained candidates, green marks are excluded, and cyan shows the sampled shape (rings are recorded in measurements). The review embeds its photos. Share the HTML and **results.json** with colleagues; **settings.json** records exact parameters and **summary.json** records counts. Original detection results are also preserved for replay.
+
+This workflow does not receive an OpenAI key, does not use the API whitening classifier, and does not run centering. New batches use eBay credentials; replay uses saved sheets without fetching listings. It is an experimental candidate filter, not a card pass/fail test. Lower thresholds remove more spots, including potentially real chips. Counts are not accuracy measurements. The normal **Run card pipeline** workflow is unchanged.
