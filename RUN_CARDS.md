@@ -228,6 +228,7 @@ serve a separate purpose and are still used by the whitening model.
 In GitHub **Actions → Test pixel whitening candidates → Run workflow**, select:
 
 - **geometry:** triangle, square, circle, or perimeter ring.
+- **candidate_strategy:** `edge_uncertainty` adds conservative background rejection before the existing grain/geometry rules; `legacy` restores the previous candidate decisions. Defaults to edge_uncertainty. Use the same replay run and all other settings for comparisons.
 - **size_pixels:** triangle/square side length, circle diameter, or ring width, normalized to a 500-pixel corner crop. Default triangle side 12 px gives about 10.4 px tip-to-base distance.
 - **blue_percentage:** exclusion threshold (default 60%, allowing 40% non-blue).
 - **grain_filter:** enabled by default; reject weak small candidates consistent with nearby blue-area noise before geometry. Removed candidates carry G labels. Disable it and replay the same batch for a controlled comparison.
@@ -241,3 +242,9 @@ Download **card-results-pixel-N**, extract it, and open **candidate_review/revie
 This workflow does not receive an OpenAI key, does not use the API whitening classifier, and does not run centering. New batches use eBay credentials; replay uses saved sheets without fetching listings. It is an experimental candidate filter, not a card pass/fail test. Lower thresholds remove more spots, including potentially real chips. Counts are not accuracy measurements. The normal **Run card pipeline** workflow is unchanged.
 
 Large spots no longer bypass geometry or the inner-boundary filter. No L labels are generated.
+
+The edge strategy uses three blue silhouettes plus a 4%-of-crop safety margin (20 pixels on a 500-pixel tile). A whole candidate must lie outside every estimate and that margin to receive **B** (background). The margin widens where estimates differ; unreliable fits skip background rejection. Bright neutral regions connected to the uncertain edge also remain uncertain. These are conservative heuristics, not calibrated confidence. Glare, colored backgrounds, and sleeve dust near the edge remain difficult. The original image is never cropped or masked for measurement. Geometry/grain rules can still reject candidates in the uncertainty zone.
+
+With the new strategy, the main review shows retained candidates; expand **Show edge uncertainty and all excluded candidates** to see amber uncertainty and B/G/T labels. All exclusions remain in results.json. Corners with unresolved edges are explicitly noted.
+
+Fallback code is preserved at tag **pixel-fallback-before-edge-uncertainty** (commit b908443). Selecting legacy restores the old decision behavior without reverting the repository. To reproduce the old experiment exactly, also keep the same photos, geometry, size, percentage, and grain setting.

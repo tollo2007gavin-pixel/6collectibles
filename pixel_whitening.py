@@ -147,7 +147,7 @@ def grain_measurement(component, light_residual, saturation_loss, blue_reference
     return result
 
 
-def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring', grain_filter=False):
+def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring', grain_filter=False, edge_filter=False):
     """Mark light spots using each crop's measured blue silhouette; require review."""
     tiles = corner_tiles(sheet)
     overlay = sheet.copy()
@@ -156,7 +156,14 @@ def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring'
     source_candidate_id = 0
     for name, offset_x, offset_y, crop in tiles:
         band, interior = inspection_band(name, crop)
+        edge_info={'status':'disabled'}
+        if edge_filter:
+            from edge_uncertainty import estimate, classify
+            edge_info, background, uncertainty = estimate(crop,name)
         view = overlay[offset_y:offset_y+crop.shape[0], offset_x:offset_x+crop.shape[1]]
+        if edge_filter and edge_info['status']=='agreement':
+            # A translucent amber zone shows uncertainty without hiding source detail.
+            view[uncertainty]=(view[uncertainty]*.75+np.array([0,190,255])*.25).astype(np.uint8)
         outline = cv2.morphologyEx(band.astype(np.uint8), cv2.MORPH_GRADIENT,
                                    np.ones((3, 3), np.uint8), borderType=cv2.BORDER_REPLICATE)
         if surround_threshold is None:
@@ -184,6 +191,17 @@ def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring'
             overlap = int(np.count_nonzero(component & band))
             interior_overlap = int(np.count_nonzero(component & interior))
             scaled_area = area * (500/crop.shape[0])**2
+            edge={'status':edge_info['status']}
+            if edge_filter and edge_info['status']=='agreement':
+                edge.update(classify(component,background,uncertainty))
+                if edge['exclude']:
+                    excluded_candidates.append(dict(id=source_candidate_id,corner=name,reason_code='B',
+                        display_label=f'{source_candidate_id}B',reason='outside_edge_uncertainty_zone',
+                        edge=edge,area_at_500px=scaled_area,box_in_corner=[x,y,width,height]))
+                    cv2.rectangle(view,(x,y),(x+width,y+height),(0,180,0),1)
+                    cv2.putText(view,f'{source_candidate_id}B',(x,max(12,y-3)),
+                                cv2.FONT_HERSHEY_SIMPLEX,.4,(0,180,0),1)
+                    continue
             grain = grain_measurement(component, light-baseline, sat_baseline-saturation,
                                       blue & interior) if grain_filter else {'status':'disabled','exclude':False}
             if grain['exclude']:
@@ -217,6 +235,7 @@ def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring'
                     excluded_candidates.append(dict(id=source_candidate_id, corner=name,
                         reason_code=code, display_label=f'{source_candidate_id}{code}',
                         grain=grain,
+                        edge=edge,
                         area_at_500px=scaled_area, surrounding_blue=ring_metrics,
                         box_in_corner=[x,y,width,height], reason='surrounded_by_blue'))
                     cv2.rectangle(view, (x,y), (x+width,y+height), (0,180,0), 1)
@@ -234,6 +253,7 @@ def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring'
             candidates.append(dict(id=candidate_id, corner=name, category='light_spot_candidate',
                                    reason_code=code, display_label=f'{candidate_id}{code}',
                                    grain=grain,
+                                   edge=edge,
                                    surrounding_blue=ring_metrics,
                                    retained_by=retained_by, area_at_500px=round(scaled_area, 2),
                                    fraction_in_band=round(overlap/area, 3),
@@ -246,10 +266,12 @@ def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring'
             cv2.putText(view, f'{candidate_id}{code}', (max(0, x-2), max(12, y-3)),
                         cv2.FONT_HERSHEY_SIMPLEX, .4, (0, 0, 255), 1)
         corners.append(dict(corner=name, source_box=[offset_x, offset_y, crop.shape[1], crop.shape[0]],
+                            edge_estimate=edge_info,
                             candidate_ids=ids, boundary_status='measured' if band.any() else 'unconfirmed'))
     return dict(status='needs_review', candidate_count=len(candidates), candidates=candidates, corners=corners,
                 excluded_candidates=excluded_candidates,
                 grain_filter_enabled=grain_filter,
+                edge_filter_enabled=edge_filter,
                 input_mode='existing_corner_tip_sheet', measurement_image_size=[sheet.shape[1], sheet.shape[0]],
                 band_calibration='Each crop measured independently; inner cutoff 2.4% of tile width; no outer cutoff',
                 limitations=['Light spots may be glare, dust, background or damage',

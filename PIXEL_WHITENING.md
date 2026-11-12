@@ -1,5 +1,13 @@
 # Experimental four-corner inspection
 
+## Optional edge uncertainty strategy
+
+`--edge-filter` adds a conservative background gate before grain and geometry. `edge_uncertainty.py` creates three blue silhouettes using saturation factors .55/.65/.75, rejects implausible or strongly disagreeing estimates, and protects the union with a 4%-of-tile margin. A connected candidate is excluded only if all its pixels are outside the protected region. Bright neutral components touching the edge are treated as uncertain. This deliberately retains more candidates against white/glared backgrounds. It does not claim exact outlines, calibrated uncertainty, or reliable dust/damage separation. The grain/triangle stages remain unchanged and may still reject a genuine chip.
+
+`B` means background rejection; `G` and geometry letters retain their prior meanings. An unconfirmed edge skips the B filter. Original pixels remain unchanged; amber shading exists only in the audit overlay. Saved candidate IDs and source hashes make baseline comparisons possible. No large-spot exemption has been reintroduced.
+
+Offline evaluation tools: `evaluate_edge_filter.py` measures margin sensitivity and known-example perturbations; `verify_edge_replay.py` checks exact legacy decisions and repeated enhanced decisions against saved JSON. These are regression checks, not independent accuracy evaluations. The saved fallback tag is pixel-fallback-before-edge-uncertainty.
+
 Optional grain filtering (`--grain-filter`) runs before geometry, preserving original candidate IDs and recording G exclusions. It estimates local brightness-residual noise using median absolute deviation in nearby blue pixels within the estimated card interior, excluding each candidate and a small margin. This is not a full validated segmentation of the area between the outer card edge and the interior artwork rectangle. Border/artwork contamination remains possible.
 
 The conservative initial rule requires at least 100 reference pixels, noise sigma between 4 and 18, candidate area below 40 normalized pixels, 75th-percentile brightness residual below a noise-dependent threshold (13–30), and 75th-percentile saturation loss below 30. Large or strongly contrasting marks survive. Insufficient or unstable reference skips grain rejection; overall output remains needs_review. Glare classification and damage accuracy are not established by this rule. Compare G labels against human-reviewed chips before increasing its strength.

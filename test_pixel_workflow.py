@@ -21,8 +21,10 @@ class PixelWorkflowTests(unittest.TestCase):
         self.assertEqual(inputs['pipeline'],'detection')
         self.assertTrue(inputs['prepare_api_only'])
         self.assertEqual(inputs['max_whitening_cards'],0)
+        self.assertEqual(c['candidate_strategy'],'edge_uncertainty')
+        self.assertEqual(w.settings({'candidate_strategy':'legacy'})['candidate_strategy'],'legacy')
         for bad in [{'geometry':'oops'},{'size_pixels':'nan'},{'blue_percentage':'0'},
-                    {'replay_run_id':'../x'},{'max_listings':0},{'card_ids':'{}'}]:
+                    {'replay_run_id':'../x'},{'max_listings':0},{'card_ids':'{}'}, {'candidate_strategy':'wrong'}]:
             with self.assertRaises(ValueError):w.settings(bad)
 
     def test_square_and_circle_dimensions(self):
@@ -62,5 +64,6 @@ class PixelWorkflowTests(unittest.TestCase):
                 data=json.loads(reviews[0].with_name('results.json').read_text())
                 self.assertEqual(data[1]['status'],'no_saved_corner_sheet')
                 self.assertEqual(data[0]['surrounding_blue_settings']['geometry'],shape)
+                self.assertTrue(data[0]['edge_filter_enabled'])
 
 if __name__=='__main__':unittest.main()

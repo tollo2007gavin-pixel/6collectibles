@@ -3,6 +3,11 @@ name: Test pixel whitening candidates
 on:
   workflow_dispatch:
     inputs:
+      candidate_strategy:
+        description: 'Edge uncertainty rejects clear background; legacy restores previous candidate logic'
+        type: choice
+        options: [edge_uncertainty, legacy]
+        default: edge_uncertainty
       geometry:
         description: 'Candidate sampling shape (no whitening API)'
         type: choice
@@ -66,7 +71,7 @@ jobs:
       - name: Validate options and test candidate evaluation offline
         run: |
           python -c "import os,json; from pixel_workflow import settings; settings(json.loads(os.environ['PIXEL_TEST_INPUTS']))"
-          python -m unittest test_pixel_whitening test_blue_surround test_triangle_blue test_pixel_workflow test_detection_mode test_grain_filter
+          python -m unittest test_pixel_whitening test_blue_surround test_triangle_blue test_pixel_workflow test_detection_mode test_grain_filter test_edge_uncertainty
       - name: Download previous photos and sheets
         if: ${{ inputs.replay_run_id != '' }}
         uses: actions/download-artifact@v4

@@ -32,6 +32,9 @@ def settings(inputs):
     if border not in {'yellow','gx','all'}:
         raise ValueError('Unknown border design')
     grain = inputs.get('grain_filter',True)
+    strategy=inputs.get('candidate_strategy','edge_uncertainty')
+    if strategy not in ('edge_uncertainty','legacy'):
+        raise ValueError('Unknown candidate strategy')
     if type(grain) is not bool:
         raise ValueError('Grain filter must be a boolean')
     ids = json.loads(inputs.get('card_ids','[]'))
@@ -40,7 +43,7 @@ def settings(inputs):
     # UI gives an actual triangle side length, not its altitude.
     fraction = size/500 * (math.sqrt(3)/2 if shape=='triangle' else 1)
     return dict(geometry=shape,size_pixels_at_500=size,blue_threshold=percentage/100,
-                measurement_fraction=fraction,grain_filter=grain,
+                measurement_fraction=fraction,grain_filter=grain,candidate_strategy=strategy,
                 replay_run_id=replay,max_listings=count,border_type=border,card_ids=ids)
 
 
@@ -86,6 +89,8 @@ def main():
              '--radius-fraction',str(config['measurement_fraction']),'--geometry',config['geometry']]
     if config['grain_filter']:
         command.append('--grain-filter')
+    if config['candidate_strategy']=='edge_uncertainty':
+        command.append('--edge-filter')
     subprocess.run(command,cwd=ROOT,check=True)
     (output/'settings.json').write_text(json.dumps(config,indent=2),encoding='utf-8')
     results=json.loads((output/'candidate_review'/'results.json').read_text())
@@ -102,6 +107,7 @@ def main():
              "Download the card-results-pixel artifact and open candidate_review/review.html "
              "inside its run folder. Red = retained, green = excluded, cyan = sampled shape. "
              "settings.json and results.json record the experiment.\n")
+    message+=f"\nCandidate strategy: **{config['candidate_strategy']}**. Choose legacy to restore the pre-edge-filter logic.\n"
     (output/'README.md').write_text(message,encoding='utf-8')
     if os.environ.get('GITHUB_STEP_SUMMARY'):
         with open(os.environ['GITHUB_STEP_SUMMARY'],'a',encoding='utf-8') as f:f.write(message)
