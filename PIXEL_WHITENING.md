@@ -1,5 +1,9 @@
 # Experimental four-corner inspection
 
+## Printed artwork exclusion
+
+`--art-filter` detects pale, roughly rectangular regions extending through both inward crop sides. It requires reliable edge estimates, a local blue reference, minimum width/height (6% of crop), area (0.8%–40% of crop) and rectangular occupancy (60%). A 2%-of-crop allowance captures blurred printed-art boundaries. The mask is restricted to estimated card interior outside the edge uncertainty zone, and only wholly contained candidates are excluded. Exclusions retain their IDs and receive A labels. This is a specific normalized-corner layout heuristic, not semantic artwork recognition; ambiguous/unsupported cases remain eligible. It does not classify all white interior pixels as artwork or restore a large-spot exception.
+
 ## Optional edge uncertainty strategy
 
 `--edge-filter` adds a conservative background gate before grain and geometry. `edge_uncertainty.py` creates three blue silhouettes using saturation factors .55/.65/.75, rejects implausible or strongly disagreeing estimates, and protects the union with a 4%-of-tile margin. A connected candidate is excluded only if all its pixels are outside the protected region. Bright neutral components touching the edge are treated as uncertain. This deliberately retains more candidates against white/glared backgrounds. It does not claim exact outlines, calibrated uncertainty, or reliable dust/damage separation. The grain/triangle stages remain unchanged and may still reject a genuine chip.

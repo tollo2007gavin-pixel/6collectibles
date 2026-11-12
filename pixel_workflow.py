@@ -32,6 +32,9 @@ def settings(inputs):
     if border not in {'yellow','gx','all'}:
         raise ValueError('Unknown border design')
     grain = inputs.get('grain_filter',True)
+    art=inputs.get('exclude_interior_art',True)
+    if type(art) is not bool:
+        raise ValueError('Interior art exclusion must be a boolean')
     strategy=inputs.get('candidate_strategy','edge_uncertainty')
     if strategy not in ('edge_uncertainty','legacy'):
         raise ValueError('Unknown candidate strategy')
@@ -43,7 +46,7 @@ def settings(inputs):
     # UI gives an actual triangle side length, not its altitude.
     fraction = size/500 * (math.sqrt(3)/2 if shape=='triangle' else 1)
     return dict(geometry=shape,size_pixels_at_500=size,blue_threshold=percentage/100,
-                measurement_fraction=fraction,grain_filter=grain,candidate_strategy=strategy,
+                measurement_fraction=fraction,grain_filter=grain,candidate_strategy=strategy,exclude_interior_art=art,
                 replay_run_id=replay,max_listings=count,border_type=border,card_ids=ids)
 
 
@@ -91,6 +94,8 @@ def main():
         command.append('--grain-filter')
     if config['candidate_strategy']=='edge_uncertainty':
         command.append('--edge-filter')
+        if config['exclude_interior_art']:
+            command.append('--art-filter')
     subprocess.run(command,cwd=ROOT,check=True)
     (output/'settings.json').write_text(json.dumps(config,indent=2),encoding='utf-8')
     results=json.loads((output/'candidate_review'/'results.json').read_text())

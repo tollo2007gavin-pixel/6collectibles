@@ -147,7 +147,7 @@ def grain_measurement(component, light_residual, saturation_loss, blue_reference
     return result
 
 
-def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring', grain_filter=False, edge_filter=False):
+def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring', grain_filter=False, edge_filter=False, art_filter=False):
     """Mark light spots using each crop's measured blue silhouette; require review."""
     tiles = corner_tiles(sheet)
     overlay = sheet.copy()
@@ -157,9 +157,13 @@ def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring'
     for name, offset_x, offset_y, crop in tiles:
         band, interior = inspection_band(name, crop)
         edge_info={'status':'disabled'}
-        if edge_filter:
+        if edge_filter or art_filter:
             from edge_uncertainty import estimate, classify
             edge_info, background, uncertainty = estimate(crop,name)
+        art_info={'status':'disabled'}
+        if art_filter:
+            from interior_art import estimate as estimate_art
+            art_info,art_mask=estimate_art(crop,name,interior,uncertainty,edge_info['status'])
         view = overlay[offset_y:offset_y+crop.shape[0], offset_x:offset_x+crop.shape[1]]
         if edge_filter and edge_info['status']=='agreement':
             # A translucent amber zone shows uncertainty without hiding source detail.
@@ -191,6 +195,14 @@ def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring'
             overlap = int(np.count_nonzero(component & band))
             interior_overlap = int(np.count_nonzero(component & interior))
             scaled_area = area * (500/crop.shape[0])**2
+            if art_filter and np.all(art_mask[component]):
+                excluded_candidates.append(dict(id=source_candidate_id,corner=name,reason_code='A',
+                    display_label=f'{source_candidate_id}A',reason='printed_interior_art',
+                    area_at_500px=scaled_area,box_in_corner=[x,y,width,height]))
+                cv2.rectangle(view,(x,y),(x+width,y+height),(0,180,0),1)
+                cv2.putText(view,f'{source_candidate_id}A',(x,max(12,y-3)),
+                            cv2.FONT_HERSHEY_SIMPLEX,.4,(0,180,0),1)
+                continue
             edge={'status':edge_info['status']}
             if edge_filter and edge_info['status']=='agreement':
                 edge.update(classify(component,background,uncertainty))
@@ -267,11 +279,13 @@ def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring'
                         cv2.FONT_HERSHEY_SIMPLEX, .4, (0, 0, 255), 1)
         corners.append(dict(corner=name, source_box=[offset_x, offset_y, crop.shape[1], crop.shape[0]],
                             edge_estimate=edge_info,
+                            interior_art=art_info,
                             candidate_ids=ids, boundary_status='measured' if band.any() else 'unconfirmed'))
     return dict(status='needs_review', candidate_count=len(candidates), candidates=candidates, corners=corners,
                 excluded_candidates=excluded_candidates,
                 grain_filter_enabled=grain_filter,
                 edge_filter_enabled=edge_filter,
+                art_filter_enabled=art_filter,
                 input_mode='existing_corner_tip_sheet', measurement_image_size=[sheet.shape[1], sheet.shape[0]],
                 band_calibration='Each crop measured independently; inner cutoff 2.4% of tile width; no outer cutoff',
                 limitations=['Light spots may be glare, dust, background or damage',

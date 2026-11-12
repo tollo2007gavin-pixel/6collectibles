@@ -22,6 +22,7 @@ def main():
     parser.add_argument('--geometry', choices=['ring','triangle','square','circle'], default='ring')
     parser.add_argument('--grain-filter', action='store_true')
     parser.add_argument('--edge-filter', action='store_true')
+    parser.add_argument('--art-filter', action='store_true')
     args = parser.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=False)
@@ -38,7 +39,7 @@ def main():
         raw = base64.b64decode(source['src'].split(',', 1)[1], validate=True)
         image = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
         result, overlay = inspect(image, args.surround_threshold, args.radius_fraction, args.geometry,
-                                  grain_filter=args.grain_filter, edge_filter=args.edge_filter)
+                                  grain_filter=args.grain_filter, edge_filter=args.edge_filter,art_filter=args.art_filter)
         if args.surround_threshold is not None:
             result['band_calibration'] = 'Not used; local blue geometry filter replaces boundary filter'
             result['surrounding_blue_settings'] = dict(threshold=args.surround_threshold,
@@ -48,7 +49,7 @@ def main():
                       prior_decision=card['pipeline_decision']['whitening'],
                       source_file=source['file'], source_sha256=hashlib.sha256(raw).hexdigest())
         result['code_sha256']={name:hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest()
-                               for name in ('pixel_whitening.py','edge_uncertainty.py')}
+                               for name in ('pixel_whitening.py','edge_uncertainty.py','interior_art.py')}
         results.append(result)
         filename = f"card-{card['number']}.png"
         if not cv2.imwrite(str(out/filename), overlay):
@@ -85,7 +86,7 @@ def main():
             '@media(max-width:750px){.comparison{grid-template-columns:1fr}}'
             'pre{white-space:pre-wrap}</style><h1>Four-corner pixel inspection</h1>'
             '<p>These are the exact corner close-ups saved by the sheet-making pipeline. Red boxes identify '
-            'retained candidates. Labels: T = triangle exclusion, S = square exclusion, C = circle exclusion, '
+            'retained candidates. Labels: A = printed interior art, T = triangle exclusion, S = square exclusion, C = circle exclusion, '
             'R = ring exclusion. G = excluded as a weak small '
             'spot in a locally noisy blue area. B = outside all edge estimates plus their safety margin. '
             'Amber shading shows the edge uncertainty zone when enabled. '

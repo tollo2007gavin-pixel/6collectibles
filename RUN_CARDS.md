@@ -232,6 +232,7 @@ In GitHub **Actions → Test pixel whitening candidates → Run workflow**, sele
 - **size_pixels:** triangle/square side length, circle diameter, or ring width, normalized to a 500-pixel corner crop. Default triangle side 12 px gives about 10.4 px tip-to-base distance.
 - **blue_percentage:** exclusion threshold (default 60%, allowing 40% non-blue).
 - **grain_filter:** enabled by default; reject weak small candidates consistent with nearby blue-area noise before geometry. Removed candidates carry G labels. Disable it and replay the same batch for a controlled comparison.
+- **exclude_interior_art:** enabled by default for the edge_uncertainty strategy. Large pale rectangles extending through both inward sides of a corner crop are excluded as printed artwork (A labels). The entire candidate must be inside the detected art region, clear of the edge uncertainty zone. Disable this checkbox to compare; legacy ignores it and preserves old decisions.
 - **replay_run_id:** paste the numeric ID from a previous Actions run URL to compare settings on saved sheets. Leave blank to fetch a new eBay batch and prepare sheets with the validated detector.
 - **max_listings**, **border_type**, and **card_ids:** control the batch. Replay evaluates up to max_listings saved records in original order; border/card search filters only apply to new batches.
 
