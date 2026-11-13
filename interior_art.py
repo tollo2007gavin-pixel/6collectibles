@@ -31,12 +31,18 @@ def estimate(crop, corner, interior, uncertainty, edge_status):
         # Artwork extends through BOTH inward tile sides. A pale edge chip or
         # detached interior spot does not provide this rectangular layout evidence.
         if x>size*.02 or y>size*.02:continue
-        if min(w,h)<size*.06 or area<size*size*.008 or area>size*size*.4:continue
         fill=area/(w*h)
-        if fill<.6:continue
+        regular=min(w,h)>=size*.06 and fill>=.6
+        # A crop can expose only a thin slice of the printed rectangle. Require
+        # a long, dense strip at the actual inward corner rather than lowering
+        # the minimum size for every pale mark.
+        clipped=(min(w,h)>=size*.03 and max(w,h)>=size*.20 and
+                 max(x,y)<=size*.006 and fill>=.85)
+        if not (regular or clipped) or area<size*size*.008 or area>size*size*.4:continue
         pad=max(2,round(size*.02))
         mask[:min(size,y+h+pad),:min(size,x+w+pad)]=1
-        boxes.append(dict(width=int(w),height=int(h),fill=float(fill)))
+        boxes.append(dict(width=int(w),height=int(h),fill=float(fill),
+                          layout='rectangle' if regular else 'clipped_strip'))
     mask=mask.astype(bool)&core
     return dict(status='detected' if boxes else 'not_detected',rectangles=boxes,
                 masked_fraction=float(mask.mean())),orient(mask)

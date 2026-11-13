@@ -2,6 +2,8 @@
 
 ## Printed artwork exclusion
 
+Clipped strips have a separate rule: minimum visible short side 3% and long side 20% of the crop, at least 85% rectangular occupancy, and placement within 0.6% of both inward crop sides. The normal area limits and edge-uncertainty protection still apply. This handles a narrow portion of artwork cut by the crop (such as card 3 #5) without lowering the ordinary rectangle minimum for all spots.
+
 `--art-filter` detects pale, roughly rectangular regions extending through both inward crop sides. It requires reliable edge estimates, a local blue reference, minimum width/height (6% of crop), area (0.8%–40% of crop) and rectangular occupancy (60%). A 2%-of-crop allowance captures blurred printed-art boundaries. The mask is restricted to estimated card interior outside the edge uncertainty zone, and only wholly contained candidates are excluded. Exclusions retain their IDs and receive A labels. This is a specific normalized-corner layout heuristic, not semantic artwork recognition; ambiguous/unsupported cases remain eligible. It does not classify all white interior pixels as artwork or restore a large-spot exception.
 
 ## Optional edge uncertainty strategy

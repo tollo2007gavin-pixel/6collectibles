@@ -47,4 +47,21 @@ class InteriorArtTests(unittest.TestCase):
         self.assertTrue(mask[40,40])
         self.assertFalse((mask&zone).any())
 
+    def test_clipped_art_strip_in_all_orientations_and_scales(self):
+        for size in [250,500,1000]:
+            for corner,flip in {'BR':lambda a:a,'BL':np.fliplr,'TR':np.flipud,
+                                'TL':lambda a:np.flipud(np.fliplr(a))}.items():
+                im,inside,zone=self.fixture(size);im[:]=(140,45,20)
+                im[:round(size*.268),:round(size*.048)]=(180,180,180)
+                info,mask=estimate(flip(im).copy(),corner,flip(inside),flip(zone),'agreement')
+                self.assertEqual(info['rectangles'][0]['layout'],'clipped_strip')
+                self.assertTrue(flip(mask)[round(size*.24),round(size*.02)])
+                self.assertFalse((mask&flip(zone)).any())
+
+    def test_small_thin_or_detached_strips_are_not_art(self):
+        for box in [(0,0,5,134),(0,0,24,50),(20,20,44,154)]:
+            im,inside,zone=self.fixture();im[:]=(140,45,20)
+            cv2.rectangle(im,box[:2],box[2:],(180,180,180),-1)
+            self.assertFalse(estimate(im,'BR',inside,zone,'agreement')[1].any())
+
 if __name__=='__main__':unittest.main()
