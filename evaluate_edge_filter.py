@@ -22,7 +22,7 @@ def main():
     for margin in (.024,.04,.06):
         started=time.perf_counter();rows=[]
         for number,image in originals:
-            with patch.object(edge_uncertainty,'estimate',side_effect=lambda c,n:estimate(c,n,margin)):
+            with patch.object(edge_uncertainty,'estimate',side_effect=lambda c,n,**kw:estimate(c,n,margin,**kw)):
                 result,_=inspect(image,.6,.02,'triangle',True,True)
             rows.append(dict(number=number,retained=[c['id'] for c in result['candidates']],
                              background=[c['id'] for c in result['excluded_candidates'] if c['reason_code']=='B'],

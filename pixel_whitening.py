@@ -157,9 +157,10 @@ def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring'
     for name, offset_x, offset_y, crop in tiles:
         band, interior = inspection_band(name, crop)
         edge_info={'status':'disabled'}
+        edge_details={}
         if edge_filter or art_filter:
             from edge_uncertainty import estimate, classify
-            edge_info, background, uncertainty = estimate(crop,name)
+            edge_info, background, uncertainty = estimate(crop,name,details=edge_details)
         art_info={'status':'disabled'}
         if art_filter:
             from interior_art import estimate as estimate_art
@@ -206,6 +207,10 @@ def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring'
             edge={'status':edge_info['status']}
             if edge_filter and edge_info['status']=='agreement':
                 edge.update(classify(component,background,uncertainty))
+                edge.update(possible_card_overlap=float(edge_details['possible_interior'][component].mean()),
+                            min_outside_distance=float(edge_details['outside_distance'][component].min()),
+                            median_outside_distance=float(np.median(edge_details['outside_distance'][component])))
+                edge['association']='card_associated' if edge['possible_card_overlap']>0 else 'off_card_uncertain'
                 if edge['exclude']:
                     excluded_candidates.append(dict(id=source_candidate_id,corner=name,reason_code='B',
                         display_label=f'{source_candidate_id}B',reason='outside_edge_uncertainty_zone',

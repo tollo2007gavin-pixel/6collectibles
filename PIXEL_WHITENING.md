@@ -8,6 +8,8 @@ Clipped strips have a separate rule: minimum visible short side 3% and long side
 
 ## Optional edge uncertainty strategy
 
+Edge diagnostics now distinguish overlap with any estimated card interior (`card_associated`) from spots outside every estimate but still inside the safety margin (`off_card_uncertain`). This is location evidence only; it does not override candidate retention or certify damage. Raw outside distances and overlap fractions are recorded. `card5_edge_audit.py` produces a one-card comparison from the saved review and a source-hash-bound human-label JSON file; labels never enter the detector.
+
 `--edge-filter` adds a conservative background gate before grain and geometry. `edge_uncertainty.py` creates three blue silhouettes using saturation factors .55/.65/.75, rejects implausible or strongly disagreeing estimates, and protects the union with a 4%-of-tile margin. A connected candidate is excluded only if all its pixels are outside the protected region. Bright neutral components touching the edge are treated as uncertain. This deliberately retains more candidates against white/glared backgrounds. It does not claim exact outlines, calibrated uncertainty, or reliable dust/damage separation. The grain/triangle stages remain unchanged and may still reject a genuine chip.
 
 `B` means background rejection; `G` and geometry letters retain their prior meanings. An unconfirmed edge skips the B filter. Original pixels remain unchanged; amber shading exists only in the audit overlay. Saved candidate IDs and source hashes make baseline comparisons possible. No large-spot exemption has been reintroduced.

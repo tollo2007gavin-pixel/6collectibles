@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 
 
-def estimate(crop, corner, margin_fraction=.04):
+def estimate(crop, corner, margin_fraction=.04, details=None):
     size=crop.shape[0]
     hsv=cv2.cvtColor(crop,cv2.COLOR_BGR2HSV)
     plausible=(hsv[:,:,0]>=85)&(hsv[:,:,0]<=140)&(hsv[:,:,2]>20)
@@ -66,6 +66,9 @@ def estimate(crop, corner, margin_fraction=.04):
               margin_pixels=margin,background_fraction=float(background.mean()),
               uncertainty_fraction=float(zone.mean()))
     info['bright_connected_fraction']=float(glare.mean())
+    if details is not None:
+        details.update(possible_interior=union,unanimous_interior=intersection,
+                       outside_distance=outside,glare_uncertainty=glare)
     return info,background,zone
 
 

@@ -33,6 +33,16 @@ class EdgeUncertaintyTests(unittest.TestCase):
         self.assertTrue(classify(dust, background, zone)['exclude'])
         self.assertFalse(classify(edge_chip, background, zone)['exclude'])
 
+    def test_raw_card_support_distinguishes_margin_without_rejecting_it(self):
+        details={}
+        _,background,zone=estimate(self.corner(),'TR',details=details)
+        near=self.component(500,(90,85,98,90))
+        chip=self.component(500,(90,98,98,106))
+        self.assertFalse(details['possible_interior'][near].any())
+        self.assertTrue(details['possible_interior'][chip].any())
+        self.assertFalse(classify(near,background,zone)['exclude'])
+        self.assertGreater(details['outside_distance'][near].min(),0)
+
     def test_a_protrusion_touching_uncertainty_is_not_rejected_by_its_centroid(self):
         _, background, zone = estimate(self.corner(), 'TR')
         protrusion = self.component(500, (90, 15, 96, 94))
