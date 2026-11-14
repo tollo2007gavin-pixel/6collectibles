@@ -23,7 +23,10 @@ def main():
     parser.add_argument('--grain-filter', action='store_true')
     parser.add_argument('--edge-filter', action='store_true')
     parser.add_argument('--art-filter', action='store_true')
+    parser.add_argument('--classify-whitening', action='store_true')
     args = parser.parse_args()
+    if args.classify_whitening and not args.edge_filter:
+        parser.error('--classify-whitening requires --edge-filter')
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=False)
     batch, review = read_document(args.review)
@@ -39,7 +42,11 @@ def main():
         raw = base64.b64decode(source['src'].split(',', 1)[1], validate=True)
         image = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
         result, overlay = inspect(image, args.surround_threshold, args.radius_fraction, args.geometry,
-                                  grain_filter=args.grain_filter, edge_filter=args.edge_filter,art_filter=args.art_filter)
+                                  grain_filter=args.grain_filter, edge_filter=args.edge_filter,art_filter=args.art_filter,
+                                  classify_whitening=args.classify_whitening)
+        if args.classify_whitening:
+            from edge_classifier import classify
+            result['whitening_classification']=classify(result)
         if args.surround_threshold is not None:
             result['band_calibration'] = 'Not used; local blue geometry filter replaces boundary filter'
             result['surrounding_blue_settings'] = dict(threshold=args.surround_threshold,
@@ -49,21 +56,40 @@ def main():
                       prior_decision=card['pipeline_decision']['whitening'],
                       source_file=source['file'], source_sha256=hashlib.sha256(raw).hexdigest())
         result['code_sha256']={name:hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest()
-                               for name in ('pixel_whitening.py','edge_uncertainty.py','interior_art.py')}
+                               for name in ('pixel_whitening.py','edge_uncertainty.py','interior_art.py','edge_classifier.py')}
         results.append(result)
         filename = f"card-{card['number']}.png"
         if not cv2.imwrite(str(out/filename), overlay):
             raise OSError('Could not write overlay')
         encoded = base64.b64encode((out/filename).read_bytes()).decode()
         audit_panel=''
+        heading=f'{result["candidate_count"]} light-spot candidates'
+        classification_panel=''
         if args.edge_filter:
             # Default to a readable retained-only view. All exclusions and the
             # uncertainty map remain in an expandable, embedded audit image.
             clean=image.copy()
-            for c in result['candidates']:
-                x,y,w,h=c['box_in_sheet']
+            visible=result['candidates']
+            if args.classify_whitening:
+                prediction=result['whitening_classification']
+                counts=prediction['counts']
+                heading=(f'{counts["likely_whitening"]} likely whitening; {counts["likely_artifact"]} likely artifacts; '
+                         f'{counts["inconclusive"]} inconclusive (all original candidates)')
+                possible={d['id'] for d in prediction['decisions'] if d['classification']=='likely_whitening'}
+                visible=[c for c in result['candidates']+result['excluded_candidates'] if c['id'] in possible]
+                rows=''.join(f'<tr><td>{d["id"]}</td><td>{d["classification"].replace("_"," ")}</td>'
+                             f'<td>{d["reason"].replace("_"," ")}</td><td>{d["detector_filter"]}</td></tr>'
+                             for d in prediction['decisions'])
+                classification_panel=('<details><summary>Classification of every candidate</summary>'
+                    '<table><tr><th>ID</th><th>Classification</th><th>Reason</th><th>Earlier filter</th></tr>'+rows+'</table></details>')
+            for c in visible:
+                if 'box_in_sheet' not in c:
+                    ox,oy=next(t['source_box'][:2] for t in result['corners'] if t['corner']==c['corner'])
+                    x,y,w,h=c['box_in_corner'];box=[x+ox,y+oy,w,h]
+                else:box=c['box_in_sheet']
+                x,y,w,h=box
                 cv2.rectangle(clean,(x,y),(x+w,y+h),(0,0,255),1)
-                cv2.putText(clean,c['display_label'],(x,max(12,y-3)),cv2.FONT_HERSHEY_SIMPLEX,.4,(0,0,255),1)
+                cv2.putText(clean,str(c['id']),(x,max(12,y-3)),cv2.FONT_HERSHEY_SIMPLEX,.4,(0,0,255),1)
             cv2.imwrite(str(out/f"card-{card['number']}-retained.png"),clean)
             audit_panel=(f'<details><summary>Show edge uncertainty and all excluded candidates</summary>'
                          f'<img src="data:image/png;base64,{encoded}" alt="All candidates and uncertainty zone"></details>')
@@ -71,12 +97,12 @@ def main():
         unknown=[c['corner'] for c in result['corners'] if c.get('edge_estimate',{}).get('status')=='unconfirmed']
         edge_notice=f'<p>Edge unresolved in {", ".join(unknown)}; background rejection skipped there.</p>' if unknown else ''
         details = html.escape(json.dumps(result, indent=2))
-        panels.append(f'<section><h2>Card {card["number"]}</h2><p>{result["candidate_count"]} light-spot candidates</p>'+edge_notice+
+        panels.append(f'<section><h2>Card {card["number"]}</h2><p>{heading}</p>'+edge_notice+
                       '<div class="comparison"><figure><figcaption>Saved corner sheet</figcaption>'
                       f'<img src="{html.escape(source["src"], quote=True)}" alt="Original saved corner sheet"></figure>'
                       '<figure><figcaption>Candidate marks</figcaption>'
                       f'<img src="data:image/png;base64,{encoded}" alt="Candidate light spots on the same corners"></figure></div>'
-                      +audit_panel+f'<details><summary>Measurements and your prior review</summary><pre>{details}</pre></details></section>')
+                      +classification_panel+audit_panel+f'<details><summary>Measurements and your prior review</summary><pre>{details}</pre></details></section>')
         print(card['number'], result['candidate_count'], flush=True)
     (out/'results.json').write_text(json.dumps(results, indent=2), encoding='utf-8')
     page = ('<!doctype html><meta charset="utf-8"><title>Experimental pixel inspection</title>'
@@ -137,6 +163,13 @@ def main():
             '<h1>Four-corner pixel inspection</h1><p><strong>Edge uncertainty strategy.</strong> '
             'Main images show retained candidates only. Expand each card to inspect B/G/T exclusions '
             'and amber edge uncertainty. The original photo is never cropped or masked for measurement.</p>')
+        (out/'review.html').write_text(page,encoding='utf-8')
+    if args.classify_whitening:
+        page=page.replace('Main images show retained candidates only.',
+            'Main images show likely-whitening classifications only. Inconclusive is not clean; '
+            'all candidates remain in the classification table and audit image. This is an experimental classifier, '
+            'not a confirmed damage verdict. Earlier T/G filter marks in the audit are not the final classifications.')
+        page=page.replace('<figcaption>Candidate marks</figcaption>','<figcaption>Likely whitening — experimental classification</figcaption>')
         (out/'review.html').write_text(page,encoding='utf-8')
 
 

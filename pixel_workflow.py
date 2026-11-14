@@ -36,7 +36,7 @@ def settings(inputs):
     if type(art) is not bool:
         raise ValueError('Interior art exclusion must be a boolean')
     strategy=inputs.get('candidate_strategy','edge_uncertainty')
-    if strategy not in ('edge_uncertainty','legacy'):
+    if strategy not in ('edge_uncertainty','legacy','edge_classifier'):
         raise ValueError('Unknown candidate strategy')
     if type(grain) is not bool:
         raise ValueError('Grain filter must be a boolean')
@@ -92,10 +92,12 @@ def main():
              '--radius-fraction',str(config['measurement_fraction']),'--geometry',config['geometry']]
     if config['grain_filter']:
         command.append('--grain-filter')
-    if config['candidate_strategy']=='edge_uncertainty':
+    if config['candidate_strategy'] in ('edge_uncertainty','edge_classifier'):
         command.append('--edge-filter')
         if config['exclude_interior_art']:
             command.append('--art-filter')
+        if config['candidate_strategy']=='edge_classifier':
+            command.append('--classify-whitening')
     subprocess.run(command,cwd=ROOT,check=True)
     (output/'settings.json').write_text(json.dumps(config,indent=2),encoding='utf-8')
     results=json.loads((output/'candidate_review'/'results.json').read_text())
@@ -103,6 +105,9 @@ def main():
              'retained_candidates':sum(r.get('candidate_count',0) for r in results),
              'excluded_candidates':sum(len(r.get('excluded_candidates',[])) for r in results),
              'api_calls':0,'settings':config}
+    if config['candidate_strategy']=='edge_classifier':
+        summary['classification_counts']={name:sum(r.get('whitening_classification',{}).get('counts',{}).get(name,0) for r in results)
+            for name in ('likely_whitening','likely_artifact','inconclusive')}
     (output/'summary.json').write_text(json.dumps(summary,indent=2))
     message=(f"## Pixel candidate test\n\nShape: **{config['geometry']}**; normalized size: "
              f"**{config['size_pixels_at_500']:g} px**; blue threshold: **{config['blue_threshold']:.0%}**.\n\n"
@@ -113,6 +118,8 @@ def main():
              "inside its run folder. Red = retained, green = excluded, cyan = sampled shape. "
              "settings.json and results.json record the experiment.\n")
     message+=f"\nCandidate strategy: **{config['candidate_strategy']}**. Choose legacy to restore the pre-edge-filter logic.\n"
+    if 'classification_counts' in summary:
+        message+='\nExperimental classifications: '+json.dumps(summary['classification_counts'])+'. Inconclusive is not clean.\n'
     (output/'README.md').write_text(message,encoding='utf-8')
     if os.environ.get('GITHUB_STEP_SUMMARY'):
         with open(os.environ['GITHUB_STEP_SUMMARY'],'a',encoding='utf-8') as f:f.write(message)

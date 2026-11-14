@@ -147,7 +147,7 @@ def grain_measurement(component, light_residual, saturation_loss, blue_reference
     return result
 
 
-def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring', grain_filter=False, edge_filter=False, art_filter=False):
+def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring', grain_filter=False, edge_filter=False, art_filter=False, classify_whitening=False):
     """Mark light spots using each crop's measured blue silhouette; require review."""
     tiles = corner_tiles(sheet)
     overlay = sheet.copy()
@@ -193,12 +193,17 @@ def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring'
                 continue
             source_candidate_id += 1
             component = labels == index
+            ys,xs=np.where(component)
+            eigenvalues=np.linalg.eigvalsh(np.cov(np.stack([xs,ys])))
+            shape=dict(axis_ratio=float(np.sqrt(max(eigenvalues[-1],1)/max(eigenvalues[0],1))),
+                       fill_fraction=area/(width*height))
             overlap = int(np.count_nonzero(component & band))
             interior_overlap = int(np.count_nonzero(component & interior))
             scaled_area = area * (500/crop.shape[0])**2
             if art_filter and np.all(art_mask[component]):
                 excluded_candidates.append(dict(id=source_candidate_id,corner=name,reason_code='A',
                     display_label=f'{source_candidate_id}A',reason='printed_interior_art',
+                    shape=shape,
                     area_at_500px=scaled_area,box_in_corner=[x,y,width,height]))
                 cv2.rectangle(view,(x,y),(x+width,y+height),(0,180,0),1)
                 cv2.putText(view,f'{source_candidate_id}A',(x,max(12,y-3)),
@@ -208,22 +213,25 @@ def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring'
             if edge_filter and edge_info['status']=='agreement':
                 edge.update(classify(component,background,uncertainty))
                 edge.update(possible_card_overlap=float(edge_details['possible_interior'][component].mean()),
+                            glare_overlap=float(edge_details['glare_uncertainty'][component].mean()),
                             min_outside_distance=float(edge_details['outside_distance'][component].min()),
                             median_outside_distance=float(np.median(edge_details['outside_distance'][component])))
                 edge['association']='card_associated' if edge['possible_card_overlap']>0 else 'off_card_uncertain'
                 if edge['exclude']:
                     excluded_candidates.append(dict(id=source_candidate_id,corner=name,reason_code='B',
                         display_label=f'{source_candidate_id}B',reason='outside_edge_uncertainty_zone',
+                        shape=shape,
                         edge=edge,area_at_500px=scaled_area,box_in_corner=[x,y,width,height]))
                     cv2.rectangle(view,(x,y),(x+width,y+height),(0,180,0),1)
                     cv2.putText(view,f'{source_candidate_id}B',(x,max(12,y-3)),
                                 cv2.FONT_HERSHEY_SIMPLEX,.4,(0,180,0),1)
                     continue
             grain = grain_measurement(component, light-baseline, sat_baseline-saturation,
-                                      blue & interior) if grain_filter else {'status':'disabled','exclude':False}
-            if grain['exclude']:
+                                      blue & interior) if grain_filter or classify_whitening else {'status':'disabled','exclude':False}
+            if grain_filter and grain['exclude']:
                 excluded_candidates.append(dict(id=source_candidate_id,corner=name,reason_code='G',
                     display_label=f'{source_candidate_id}G',reason='local_grain',grain=grain,
+                    shape=shape,edge=edge,
                     area_at_500px=scaled_area,box_in_corner=[x,y,width,height]))
                 cv2.rectangle(view,(x,y),(x+width,y+height),(0,180,0),1)
                 cv2.putText(view,f'{source_candidate_id}G',(x,max(12,y-3)),
@@ -252,6 +260,7 @@ def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring'
                     excluded_candidates.append(dict(id=source_candidate_id, corner=name,
                         reason_code=code, display_label=f'{source_candidate_id}{code}',
                         grain=grain,
+                        shape=shape,
                         edge=edge,
                         area_at_500px=scaled_area, surrounding_blue=ring_metrics,
                         box_in_corner=[x,y,width,height], reason='surrounded_by_blue'))
@@ -270,6 +279,7 @@ def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring'
             candidates.append(dict(id=candidate_id, corner=name, category='light_spot_candidate',
                                    reason_code=code, display_label=f'{candidate_id}{code}',
                                    grain=grain,
+                                   shape=shape,
                                    edge=edge,
                                    surrounding_blue=ring_metrics,
                                    retained_by=retained_by, area_at_500px=round(scaled_area, 2),

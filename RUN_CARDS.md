@@ -229,6 +229,7 @@ In GitHub **Actions → Test pixel whitening candidates → Run workflow**, sele
 
 - **geometry:** triangle, square, circle, or perimeter ring.
 - **candidate_strategy:** `edge_uncertainty` adds conservative background rejection before the existing grain/geometry rules; `legacy` restores the previous candidate decisions. Defaults to edge_uncertainty. Use the same replay run and all other settings for comparisons.
+- **edge_classifier** is a third, experimental strategy. It classifies all original candidates as likely whitening, likely artifact, or inconclusive using location, local noise/color change and patch shape. The main image shows likely whitening only; the table and audit retain every other mark. Triangle/grain exclusions remain recorded as earlier-stage evidence, not definitive classifier decisions. A strong nearby interior patch can be recovered from triangle rejection. No candidate IDs or human labels are classifier inputs. This was developed on a small labeled set, not validated for general accuracy; the default strategy remains edge_uncertainty.
 - **size_pixels:** triangle/square side length, circle diameter, or ring width, normalized to a 500-pixel corner crop. Default triangle side 12 px gives about 10.4 px tip-to-base distance.
 - **blue_percentage:** exclusion threshold (default 60%, allowing 40% non-blue).
 - **grain_filter:** enabled by default; reject weak small candidates consistent with nearby blue-area noise before geometry. Removed candidates carry G labels. Disable it and replay the same batch for a controlled comparison.

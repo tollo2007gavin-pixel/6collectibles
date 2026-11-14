@@ -22,6 +22,7 @@ class PixelWorkflowTests(unittest.TestCase):
         self.assertTrue(inputs['prepare_api_only'])
         self.assertEqual(inputs['max_whitening_cards'],0)
         self.assertEqual(c['candidate_strategy'],'edge_uncertainty')
+        self.assertEqual(w.settings({'candidate_strategy':'edge_classifier'})['candidate_strategy'],'edge_classifier')
         self.assertEqual(w.settings({'candidate_strategy':'legacy'})['candidate_strategy'],'legacy')
         for bad in [{'geometry':'oops'},{'size_pixels':'nan'},{'blue_percentage':'0'},
                     {'replay_run_id':'../x'},{'max_listings':0},{'card_ids':'{}'}, {'candidate_strategy':'wrong'}]:
@@ -46,7 +47,7 @@ class PixelWorkflowTests(unittest.TestCase):
         batch={'cards':[{'id':'test','number':1,'pipeline_decision':{'whitening':'not_run'},
                         'images':[{'label':'Corner close-ups','file':'tips.png','src':src}]},
                        {'id':'missing','number':2,'pipeline_decision':{'whitening':'not_run'},'images':[]}]}
-        for shape in ['triangle','square','circle','ring']:
+        for shape in ['triangle','square','circle','ring','classifier']:
             with self.subTest(shape=shape), tempfile.TemporaryDirectory() as tmp:
                 root=Path(tmp);audit=root/'replay_batch'/'run'/'_audit';audit.mkdir(parents=True)
                 (audit/'run.json').write_text('{}')
@@ -56,14 +57,18 @@ class PixelWorkflowTests(unittest.TestCase):
                     return real_run(command,**kwargs,capture_output=True,text=True)
                 with patch.object(w,'ROOT',root),patch.object(w,'build_batch',return_value=batch), \
                      patch.object(w.subprocess,'run',side_effect=run), \
-                     patch.dict(os.environ,{'PIXEL_TEST_INPUTS':json.dumps({'geometry':shape,'replay_run_id':'123'})}):
+                     patch.dict(os.environ,{'PIXEL_TEST_INPUTS':json.dumps({'geometry':'triangle' if shape=='classifier' else shape,'replay_run_id':'123',
+                        'candidate_strategy':'edge_classifier' if shape=='classifier' else 'edge_uncertainty'})}):
                     w.main()
                 reviews=list(root.glob('outputs/pixel_tests/*/candidate_review/review.html'))
                 self.assertEqual(len(reviews),1)
                 self.assertIn('data:image/png;base64,',reviews[0].read_text(encoding='utf-8'))
                 data=json.loads(reviews[0].with_name('results.json').read_text())
                 self.assertEqual(data[1]['status'],'no_saved_corner_sheet')
-                self.assertEqual(data[0]['surrounding_blue_settings']['geometry'],shape)
+                self.assertEqual(data[0]['surrounding_blue_settings']['geometry'],'triangle' if shape=='classifier' else shape)
                 self.assertTrue(data[0]['edge_filter_enabled'])
+                if shape=='classifier':
+                    self.assertIn('whitening_classification',data[0])
+                    self.assertIn('Main images show likely-whitening classifications only.',reviews[0].read_text(encoding='utf-8'))
 
 if __name__=='__main__':unittest.main()

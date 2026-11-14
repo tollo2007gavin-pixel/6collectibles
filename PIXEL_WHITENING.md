@@ -1,5 +1,13 @@
 # Experimental four-corner inspection
 
+## Selective edge classification
+
+`--classify-whitening --edge-filter` adds `edge-evidence-v1` classifications to all original candidates, including previously excluded T/G spots. Printed-art/background exclusions remain likely artifacts. Strong evidence requires card association, normalized area >=40, PCA axis ratio <=3, fill >=0.25, brightness change >=max(20,4*local noise), and saturation loss >=15 or stronger brightness >=max(32,5*noise). Strong patches touching the uncertain edge become likely whitening. A strong interior patch may also qualify if its box is within 2.4% of the crop width from a supported edge patch in the same corner. This is one hop only; it cannot chain across the card. No large-spot exception exists.
+
+Spots outside all raw card estimates by >=1% of crop width and not covered by bright-edge uncertainty become likely artifacts. Remaining weak, tiny, elongated or poorly located spots are inconclusive, never clean. Long damage and compact glare are possible; these heuristics can abstain incorrectly or produce false positives. Candidate IDs only identify output records/supporting neighbors; image IDs and human labels are never features. Thresholds and reasons are saved with results.
+
+The classifier was developed with card 5 labels and checked against known card 4 examples. That is development/regression evidence, not held-out accuracy. Card 5 remained consistent under mild exposure/blur perturbations and ±10% individual threshold changes. Card 4 deteriorated under 10% darkening; no general accuracy percentage is established. Keep this strategy experimental. Fallback tag: whitening-before-classifier-v1 (4801b3d); legacy and edge_uncertainty still work.
+
 ## Printed artwork exclusion
 
 Clipped strips have a separate rule: minimum visible short side 3% and long side 20% of the crop, at least 85% rectangular occupancy, and placement within 0.6% of both inward crop sides. The normal area limits and edge-uncertainty protection still apply. This handles a narrow portion of artwork cut by the crop (such as card 3 #5) without lowering the ordinary rectangle minimum for all spots.
