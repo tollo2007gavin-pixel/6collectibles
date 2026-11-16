@@ -1,10 +1,36 @@
 """Experimental, selective whitening classification. No labels or IDs as features."""
 import math
 
-VERSION='edge-evidence-v1'
+VERSION='edge-evidence-v2'
 DEFAULTS=dict(min_area=40,max_axis_ratio=3,min_fill=.25,contrast_floor=20,noise_multiple=4,
               saturation_loss=15,strong_contrast=32,strong_noise_multiple=5,
               min_card_overlap=.2,min_edge_overlap=.25,neighbor_fraction=.024)
+PATCH_DEFAULTS=dict(min_area=40,max_area=2500,max_axis_ratio=3,min_fill=.35,
+    contrast_floor=20,noise_multiple=4,min_edge_overlap=.25,attachment_fraction=.006,
+    core_connection_fraction=.008,min_linked_saturation_loss=15,max_scale_area_ratio=2.5)
+
+
+def supported_patch(candidate,tile):
+    """Independent wider-scale evidence; abstain on lines, clipping or detachment."""
+    p=candidate.get('shape',{}).get('patch_evidence',{}).get('scales',[])
+    g=candidate.get('grain',{})
+    if len(p)!=2 or g.get('status')!='measured':return False
+    t=PATCH_DEFAULTS
+    e=candidate.get('edge',{})
+    core_attached=(e.get('min_outside_distance',float('inf'))<=tile*t['attachment_fraction'] and
+                   e.get('uncertainty_fraction',0)>=t['min_edge_overlap'] and
+                   g.get('saturation_loss_p75',0)>=t['min_linked_saturation_loss'])
+    for m in p:
+        if m.get('status')!='measured':return False
+        if not t['min_area']<=m['area_at_500px']<=t['max_area']:return False
+        if m['axis_ratio']>t['max_axis_ratio'] or m['fill_fraction']<t['min_fill']:return False
+        if m.get('edge_overlap',0)<t['min_edge_overlap']:return False
+        direct=m.get('min_outside_distance',float('inf'))<=tile*t['attachment_fraction']
+        linked=core_attached and m.get('core_gap',float('inf'))<=tile*t['core_connection_fraction']
+        if not (direct or linked):return False
+    if max(m['area_at_500px'] for m in p)/min(m['area_at_500px'] for m in p)>t['max_scale_area_ratio']:return False
+    broad=max(p,key=lambda m:m['scale'])
+    return broad['contrast_p75']>=max(t['contrast_floor'],t['noise_multiple']*g['noise_sigma'])
 
 
 def signal(candidate,limits=None):
@@ -49,15 +75,22 @@ def classify(result,limits=None):
                 else:
                     d['reason']='strong_interior_patch_requires_edge_connection'
                     eligible.append((c,d))
+            elif strong:
+                d['reason']='strong_patch_insufficient_card_overlap'
+            if d['classification']=='inconclusive' and supported_patch(c,tile):
+                d.update(classification='likely_whitening',reason='compact_light_patch_supported_at_two_scales',
+                         prior_reason=d['reason'])
+                seeds.append(c)
         decisions.append(d)
     # One-hop only: a strong interior patch may be part of a nearby edge chip.
     # No size exemption and no recursive chaining through weaker interior marks.
     for c,d in eligible:
+        if d['classification']!='inconclusive':continue
         neighbors=[s for s in seeds if s['corner']==c['corner'] and gap(c,s)<=tile*t['neighbor_fraction']]
         if neighbors:
             d.update(classification='likely_whitening',reason='strong_patch_adjacent_to_supported_edge_damage',
                      supporting_candidates=[s['id'] for s in neighbors])
-    return dict(version=VERSION,thresholds=t,decisions=decisions,
+    return dict(version=VERSION,thresholds=t,patch_thresholds=dict(PATCH_DEFAULTS),decisions=decisions,
                 counts={name:sum(d['classification']==name for d in decisions)
                         for name in ('likely_whitening','likely_artifact','inconclusive')},
                 warning='Experimental evidence rules; no calibrated accuracy or confidence. Inconclusive is not clean.')

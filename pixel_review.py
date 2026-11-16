@@ -70,7 +70,7 @@ def main():
                       source_file=source['file'], source_sha256=hashlib.sha256(raw).hexdigest())
         result['analysis_mode']='whitening_classification' if args.classify_whitening else 'candidate_detection_only'
         result['code_sha256']={name:hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest()
-                               for name in ('pixel_whitening.py','edge_uncertainty.py','interior_art.py','edge_classifier.py')}
+                               for name in ('pixel_whitening.py','edge_uncertainty.py','interior_art.py','edge_classifier.py','patch_evidence.py')}
         results.append(result)
         filename = f"card-{card['number']}.png"
         if not cv2.imwrite(str(out/filename), overlay):
@@ -90,6 +90,14 @@ def main():
                          f'{counts["inconclusive"]} inconclusive (all original candidates)')
                 possible={d['id'] for d in prediction['decisions'] if d['classification']=='likely_whitening'}
                 visible=[c for c in result['candidates']+result['excluded_candidates'] if c['id'] in possible]
+                wider={d['id'] for d in prediction['decisions']
+                       if d['reason']=='compact_light_patch_supported_at_two_scales'}
+                for index,c in enumerate(visible):
+                    if c['id'] in wider:
+                        patch=max(c['shape']['patch_evidence']['scales'],key=lambda p:p['scale'])
+                        display=dict(c,box_in_corner=patch['box_in_corner'])
+                        display.pop('box_in_sheet',None)
+                        visible[index]=display
                 rows=''.join(f'<tr><td>{d["id"]}</td><td>{d["classification"].replace("_"," ")}</td>'
                              f'<td>{d["reason"].replace("_"," ")}</td><td>{d["detector_filter"]}</td></tr>'
                              for d in prediction['decisions'])
@@ -185,7 +193,9 @@ def main():
             'Main images show likely-whitening classifications only. Inconclusive is not clean; '
             'expand the orange inconclusive-spots image for manual review. '
             'All candidates remain in the classification table and audit image. This is an experimental classifier, '
-            'not a confirmed damage verdict. Earlier T/G filter marks in the audit are not the final classifications.')
+            'not a confirmed damage verdict. For wider-patch recovery, the red box covers the supporting light patch; '
+            'the original threshold core and its ID remain in the audit. '
+            'Earlier T/G filter marks in the audit are not the final classifications.')
         page=page.replace('<figcaption>Candidate marks</figcaption>','<figcaption>Likely whitening — experimental classification</figcaption>')
         (out/'review.html').write_text(page,encoding='utf-8')
     else:

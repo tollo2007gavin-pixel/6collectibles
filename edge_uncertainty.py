@@ -7,10 +7,39 @@ import cv2
 import numpy as np
 
 
-def estimate(crop, corner, margin_fraction=.04, details=None):
+def estimate(crop, corner, margin_fraction=.04, details=None, hue_fallback=False):
+    result=_estimate(crop,corner,margin_fraction,details)
+    if result[0]['status']=='agreement' or not hue_fallback:
+        return result
+    size=crop.shape[0]
+    hsv=cv2.cvtColor(crop,cv2.COLOR_BGR2HSV)
+    lo,hi=round(size*.50),round(size*.95)
+    iy=slice(lo,hi) if corner[0]=='T' else slice(size-hi,size-lo)
+    ix=slice(lo,hi) if corner[1]=='L' else slice(size-hi,size-lo)
+    sample=hsv[iy,ix]
+    valid=(sample[:,:,0]>=85)&(sample[:,:,0]<=140)&(sample[:,:,1]>65)&(sample[:,:,2]>20)
+    hue=sample[:,:,0][valid].astype(float)
+    if hue.size<size*size*.03:
+        return result
+    middle=float(np.median(hue));mad=float(np.median(np.abs(hue-middle)))
+    tolerance=min(12.,max(8.,mad*4.))
+    supported=float(np.mean(np.abs(hue-middle)<=tolerance))
+    if supported<.8:
+        return result
+    reference=dict(median=middle,tolerance=tolerance,supported_fraction=supported,pixels=int(hue.size))
+    retry=_estimate(crop,corner,margin_fraction,details,reference)
+    if retry[0]['status']!='agreement':
+        return result
+    retry[0].update(hue_reference=reference,fallback_from=result[0]['reason'])
+    return retry
+
+
+def _estimate(crop, corner, margin_fraction=.04, details=None, hue_reference=None):
     size=crop.shape[0]
     hsv=cv2.cvtColor(crop,cv2.COLOR_BGR2HSV)
     plausible=(hsv[:,:,0]>=85)&(hsv[:,:,0]<=140)&(hsv[:,:,2]>20)
+    if hue_reference is not None:
+        plausible &= np.abs(hsv[:,:,0].astype(float)-hue_reference['median'])<=hue_reference['tolerance']
     sats=hsv[:,:,1][plausible]
     empty=np.zeros(crop.shape[:2],bool)
     def failed(reason):

@@ -8,6 +8,24 @@ from edge_uncertainty import estimate, classify
 
 
 class EdgeUncertaintyTests(unittest.TestCase):
+    def test_optional_hue_fallback_does_not_change_agreeing_estimate(self):
+        crop=self.corner()
+        a=estimate(crop,'TR');b=estimate(crop,'TR',hue_fallback=True)
+        self.assertEqual(a[0],b[0])
+        for x,y in zip(a[1:],b[1:]):self.assertTrue(np.array_equal(x,y))
+
+    def test_hue_fallback_rejects_purple_background_contamination(self):
+        crop=self.corner();hsv=cv2.cvtColor(crop,cv2.COLOR_BGR2HSV)
+        background=np.all(crop==35,axis=2)
+        hsv[background]=(135,145,110)
+        crop=cv2.cvtColor(hsv,cv2.COLOR_HSV2BGR)
+        original=estimate(crop,'TR');fallback=estimate(crop,'TR',hue_fallback=True)
+        self.assertEqual(original[0]['status'],'unconfirmed')
+        self.assertEqual(fallback[0]['status'],'agreement')
+        self.assertIn('hue_reference',fallback[0])
+        self.assertTrue(fallback[1][40,420])
+        self.assertFalse(fallback[1][300,100])
+
     def corner(self, size=500, shift=0):
         # TR corner: a rounded/chamfered blue card continues into left/bottom.
         crop = np.full((size, size, 3), 35, np.uint8)

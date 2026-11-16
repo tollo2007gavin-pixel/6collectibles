@@ -160,7 +160,7 @@ def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring'
         edge_details={}
         if edge_filter or art_filter:
             from edge_uncertainty import estimate, classify
-            edge_info, background, uncertainty = estimate(crop,name,details=edge_details)
+            edge_info, background, uncertainty = estimate(crop,name,details=edge_details,hue_fallback=classify_whitening)
         art_info={'status':'disabled'}
         if art_filter:
             from interior_art import estimate as estimate_art
@@ -186,6 +186,9 @@ def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring'
         near_blue = cv2.dilate(blue.astype(np.uint8), np.ones((9, 9), np.uint8)).astype(bool)
         mask = (pale & near_blue).astype(np.uint8)
         count, labels, stats, _ = cv2.connectedComponentsWithStats(mask, 8)
+        if classify_whitening:
+            from patch_evidence import prepare,measure as measure_patch
+            patch_responses=prepare(crop)
         ids = []
         for index in range(1, count):
             x, y, width, height, area = stats[index].tolist()
@@ -197,6 +200,8 @@ def inspect(sheet, surround_threshold=None, radius_fraction=.02, geometry='ring'
             eigenvalues=np.linalg.eigvalsh(np.cov(np.stack([xs,ys])))
             shape=dict(axis_ratio=float(np.sqrt(max(eigenvalues[-1],1)/max(eigenvalues[0],1))),
                        fill_fraction=area/(width*height))
+            if classify_whitening and edge_info['status']=='agreement':
+                shape['patch_evidence']=measure_patch(component,patch_responses,edge_details,uncertainty)
             overlap = int(np.count_nonzero(component & band))
             interior_overlap = int(np.count_nonzero(component & interior))
             scaled_area = area * (500/crop.shape[0])**2
