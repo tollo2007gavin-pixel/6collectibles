@@ -13,6 +13,19 @@ from pixel_whitening import inspect
 from review_corners import read_document
 
 
+def marked_sheet(image, result, candidates, color):
+    marked=image.copy()
+    for c in candidates:
+        if 'box_in_sheet' in c:
+            x,y,w,h=c['box_in_sheet']
+        else:
+            ox,oy=next(t['source_box'][:2] for t in result['corners'] if t['corner']==c['corner'])
+            x,y,w,h=c['box_in_corner'];x+=ox;y+=oy
+        cv2.rectangle(marked,(x,y),(x+w,y+h),color,1)
+        cv2.putText(marked,str(c['id']),(x,max(12,y-3)),cv2.FONT_HERSHEY_SIMPLEX,.4,color,1)
+    return marked
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('review')
@@ -55,6 +68,7 @@ def main():
         result.update(number=card['number'], listing=card['id'], human_review=answers.get(card['id'], {}),
                       prior_decision=card['pipeline_decision']['whitening'],
                       source_file=source['file'], source_sha256=hashlib.sha256(raw).hexdigest())
+        result['analysis_mode']='whitening_classification' if args.classify_whitening else 'candidate_detection_only'
         result['code_sha256']={name:hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest()
                                for name in ('pixel_whitening.py','edge_uncertainty.py','interior_art.py','edge_classifier.py')}
         results.append(result)
@@ -63,12 +77,11 @@ def main():
             raise OSError('Could not write overlay')
         encoded = base64.b64encode((out/filename).read_bytes()).decode()
         audit_panel=''
-        heading=f'{result["candidate_count"]} light-spot candidates'
+        heading=f'{result["candidate_count"]} possible light spots — not whitening verdicts'
         classification_panel=''
         if args.edge_filter:
             # Default to a readable retained-only view. All exclusions and the
             # uncertainty map remain in an expandable, embedded audit image.
-            clean=image.copy()
             visible=result['candidates']
             if args.classify_whitening:
                 prediction=result['whitening_classification']
@@ -82,14 +95,17 @@ def main():
                              for d in prediction['decisions'])
                 classification_panel=('<details><summary>Classification of every candidate</summary>'
                     '<table><tr><th>ID</th><th>Classification</th><th>Reason</th><th>Earlier filter</th></tr>'+rows+'</table></details>')
-            for c in visible:
-                if 'box_in_sheet' not in c:
-                    ox,oy=next(t['source_box'][:2] for t in result['corners'] if t['corner']==c['corner'])
-                    x,y,w,h=c['box_in_corner'];box=[x+ox,y+oy,w,h]
-                else:box=c['box_in_sheet']
-                x,y,w,h=box
-                cv2.rectangle(clean,(x,y),(x+w,y+h),(0,0,255),1)
-                cv2.putText(clean,str(c['id']),(x,max(12,y-3)),cv2.FONT_HERSHEY_SIMPLEX,.4,(0,0,255),1)
+                uncertain_ids={d['id'] for d in prediction['decisions'] if d['classification']=='inconclusive'}
+                uncertain=[c for c in result['candidates']+result['excluded_candidates'] if c['id'] in uncertain_ids]
+                uncertain_image=marked_sheet(image,result,uncertain,(0,140,255))
+                if not cv2.imwrite(str(out/f"card-{card['number']}-inconclusive.png"),uncertain_image):
+                    raise OSError('Could not write inconclusive overlay')
+                uncertain_encoded=base64.b64encode(cv2.imencode('.png',uncertain_image)[1]).decode()
+                classification_panel+=(f'<details><summary>Show {len(uncertain)} inconclusive spots — manual review needed</summary>'
+                    '<p>Orange marks include small or ambiguous spots. They may be genuine damage; '
+                    'absence from the likely-whitening image does not mean clean.</p>'
+                    f'<img src="data:image/png;base64,{uncertain_encoded}" alt="Inconclusive candidate locations"></details>')
+            clean=marked_sheet(image,result,visible,(0,0,255))
             cv2.imwrite(str(out/f"card-{card['number']}-retained.png"),clean)
             audit_panel=(f'<details><summary>Show edge uncertainty and all excluded candidates</summary>'
                          f'<img src="data:image/png;base64,{encoded}" alt="All candidates and uncertainty zone"></details>')
@@ -167,9 +183,16 @@ def main():
     if args.classify_whitening:
         page=page.replace('Main images show retained candidates only.',
             'Main images show likely-whitening classifications only. Inconclusive is not clean; '
-            'all candidates remain in the classification table and audit image. This is an experimental classifier, '
+            'expand the orange inconclusive-spots image for manual review. '
+            'All candidates remain in the classification table and audit image. This is an experimental classifier, '
             'not a confirmed damage verdict. Earlier T/G filter marks in the audit are not the final classifications.')
         page=page.replace('<figcaption>Candidate marks</figcaption>','<figcaption>Likely whitening — experimental classification</figcaption>')
+        (out/'review.html').write_text(page,encoding='utf-8')
+    else:
+        page=page.replace('<h1>Four-corner pixel inspection</h1>',
+            '<h1>Candidate detection only</h1><p><strong>No whitening classifier was run.</strong> '
+            'Marks show possible light spots, including tiny or ambiguous ones. To obtain likely whitening, '
+            'likely artifact and inconclusive classifications, choose edge_classifier in GitHub.</p>')
         (out/'review.html').write_text(page,encoding='utf-8')
 
 

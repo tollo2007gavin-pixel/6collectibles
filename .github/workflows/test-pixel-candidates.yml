@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       candidate_strategy:
-        description: 'Edge uncertainty rejects clear background; legacy restores previous candidate logic'
+        description: 'edge_classifier = whitening/artifact/inconclusive; edge_uncertainty = candidate marks only'
         type: choice
         options: [edge_uncertainty, edge_classifier, legacy]
         default: edge_uncertainty

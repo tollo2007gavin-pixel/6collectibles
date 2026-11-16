@@ -38,7 +38,10 @@ def estimate(crop, corner, interior, uncertainty, edge_status):
         # the minimum size for every pale mark.
         clipped=(min(w,h)>=size*.03 and max(w,h)>=size*.20 and
                  max(x,y)<=size*.006 and fill>=.85)
-        if not (regular or clipped) or area<size*size*.008 or area>size*size*.4:continue
+        # A tightly cropped strip can have enough shape evidence but less area
+        # than an ordinary rectangle. Keep the stricter strip geometry intact.
+        minimum_area=size*size*(.008 if regular else .005)
+        if not (regular or clipped) or area<minimum_area or area>size*size*.4:continue
         pad=max(2,round(size*.02))
         mask[:min(size,y+h+pad),:min(size,x+w+pad)]=1
         boxes.append(dict(width=int(w),height=int(h),fill=float(fill),

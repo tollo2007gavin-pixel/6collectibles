@@ -64,4 +64,15 @@ class InteriorArtTests(unittest.TestCase):
             cv2.rectangle(im,box[:2],box[2:],(180,180,180),-1)
             self.assertFalse(estimate(im,'BR',inside,zone,'agreement')[1].any())
 
+    def test_short_clipped_strip_does_not_inherit_full_rectangle_area_floor(self):
+        for size in (250,500,1000):
+            for corner,flip in {'BR':lambda a:a,'BL':np.fliplr,'TR':np.flipud,
+                                'TL':lambda a:np.flipud(np.fliplr(a))}.items():
+                im,inside,zone=self.fixture(size);im[:]=(140,45,20)
+                im[:round(16*size/500),:round(109*size/500)]=(180,180,180)
+                info,mask=estimate(flip(im).copy(),corner,flip(inside),flip(zone),'agreement')
+                self.assertEqual(info['status'],'detected')
+                self.assertEqual(info['rectangles'][0]['layout'],'clipped_strip')
+                self.assertFalse((mask&flip(zone)).any())
+
 if __name__=='__main__':unittest.main()

@@ -2,6 +2,8 @@
 
 ## Selective edge classification
 
+The GitHub strategy `edge_uncertainty` only marks candidate light spots; it does not run the whitening classifier. Select `edge_classifier` for the three-way classifications below. Reports explicitly name their analysis mode. Classifier reviews have a separate expandable orange overlay for inconclusive spots, including small possible chips. Those spots are not certified clean and are not discarded from review.
+
 `--classify-whitening --edge-filter` adds `edge-evidence-v1` classifications to all original candidates, including previously excluded T/G spots. Printed-art/background exclusions remain likely artifacts. Strong evidence requires card association, normalized area >=40, PCA axis ratio <=3, fill >=0.25, brightness change >=max(20,4*local noise), and saturation loss >=15 or stronger brightness >=max(32,5*noise). Strong patches touching the uncertain edge become likely whitening. A strong interior patch may also qualify if its box is within 2.4% of the crop width from a supported edge patch in the same corner. This is one hop only; it cannot chain across the card. No large-spot exception exists.
 
 Spots outside all raw card estimates by >=1% of crop width and not covered by bright-edge uncertainty become likely artifacts. Remaining weak, tiny, elongated or poorly located spots are inconclusive, never clean. Long damage and compact glare are possible; these heuristics can abstain incorrectly or produce false positives. Candidate IDs only identify output records/supporting neighbors; image IDs and human labels are never features. Thresholds and reasons are saved with results.
@@ -10,7 +12,7 @@ The classifier was developed with card 5 labels and checked against known card 4
 
 ## Printed artwork exclusion
 
-Clipped strips have a separate rule: minimum visible short side 3% and long side 20% of the crop, at least 85% rectangular occupancy, and placement within 0.6% of both inward crop sides. The normal area limits and edge-uncertainty protection still apply. This handles a narrow portion of artwork cut by the crop (such as card 3 #5) without lowering the ordinary rectangle minimum for all spots.
+Clipped strips have a separate rule: minimum visible short side 3% and long side 20% of the crop, at least 85% rectangular occupancy, and placement within 0.6% of both inward crop sides. Clipped strips use a 0.5% area floor; ordinary rectangles retain 0.8%. Both retain the 40% ceiling and edge-uncertainty protection. This handles a narrow portion of artwork cut by the crop without lowering the ordinary rectangle minimum for all spots. The former shared area floor incorrectly rejected a qualifying 109-by-16-pixel artwork strip in the November 16 batch.
 
 `--art-filter` detects pale, roughly rectangular regions extending through both inward crop sides. It requires reliable edge estimates, a local blue reference, minimum width/height (6% of crop), area (0.8%–40% of crop) and rectangular occupancy (60%). A 2%-of-crop allowance captures blurred printed-art boundaries. The mask is restricted to estimated card interior outside the edge uncertainty zone, and only wholly contained candidates are excluded. Exclusions retain their IDs and receive A labels. This is a specific normalized-corner layout heuristic, not semantic artwork recognition; ambiguous/unsupported cases remain eligible. It does not classify all white interior pixels as artwork or restore a large-spot exception.
 

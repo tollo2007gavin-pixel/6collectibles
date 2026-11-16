@@ -70,5 +70,13 @@ class PixelWorkflowTests(unittest.TestCase):
                 if shape=='classifier':
                     self.assertIn('whitening_classification',data[0])
                     self.assertIn('Main images show likely-whitening classifications only.',reviews[0].read_text(encoding='utf-8'))
+                    self.assertEqual(data[0]['analysis_mode'],'whitening_classification')
+                    self.assertIn('manual review needed',reviews[0].read_text(encoding='utf-8'))
+                    uncertain=cv2.imread(str(reviews[0].with_name('card-1-inconclusive.png')))
+                    self.assertEqual(uncertain.shape,image.shape)
+                    self.assertFalse(np.array_equal(uncertain,image))
+                else:
+                    self.assertEqual(data[0]['analysis_mode'],'candidate_detection_only')
+                    self.assertIn('No whitening classifier was run.',reviews[0].read_text(encoding='utf-8'))
 
 if __name__=='__main__':unittest.main()
