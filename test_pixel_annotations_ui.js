@@ -14,7 +14,7 @@ function boot(input=base){
  get('pixel-annotation-state').textContent=JSON.stringify(input);
  for(const card of input.cards){
   const editor=get('pixel-editor-'+card.number);editor.tools={};
-  for(const name of ['corner','label','zoom','show-candidates','canvas','complete','group','split','status','marks','undo','delete']){const e=element();e.dataset.tool=name;editor.tools[name]=e;}
+  for(const name of ['corner','label','zoom','show-candidates','canvas','group','split','status','marks','undo','delete']){const e=element();e.dataset.tool=name;editor.tools[name]=e;}
   Object.assign(editor.tools.corner,{value:'TL'});editor.tools.label.value='whitening';editor.tools.zoom.value='1';editor.tools['show-candidates'].checked=true;
   editor.querySelectorAll=()=>Object.values(editor.tools);
   editor.closest=()=>({querySelector:()=>({src:'data:image/png;base64,AA=='})});
@@ -35,7 +35,6 @@ function boot(input=base){
  tools.zoom.value='2';await tools.zoom.fire('change');tools.label.value='not_whitening';
  await tools.canvas.fire('pointerdown',{clientX:400,clientY:400,button:0});await tools.canvas.fire('pointermove',{clientX:440,clientY:460});await tools.canvas.fire('pointerup',{clientX:440,clientY:460});
  c=t.api.getState().cards[0];assert.deepEqual(Array.from(c.annotations[0].box),[200,200,20,30]);assert.equal(c.annotations[0].label,'not_whitening');assert.deepEqual(Array.from(c.complete_corners),[]);
- tools.complete.checked=true;await tools.complete.fire('change');assert.deepEqual(Array.from(t.api.getState().cards[0].complete_corners),['TL']);
  t.get('pixel-note-1').value='Chip </script> and </textarea>';await t.get('pixel-note-1').fire('input');
  await t.get('pixel-label-export').fire('click');const exported=JSON.parse(await t.downloads.at(-1).text());assert.equal(exported.cards[0].notes,'Chip </script> and </textarea>');
  await t.get('pixel-label-save').fire('click');const html=await t.downloads.at(-1).text();const restored=JSON.parse(html.match(/<script id="pixel-annotation-state" type="application\/json">(.*?)<\/script>/s)[1]);

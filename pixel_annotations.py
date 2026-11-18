@@ -30,8 +30,6 @@ def add_annotations(page, results, batch):
 </div>
 <p>Drag a tight rectangle around each chip or unwanted spot. Click a blue candidate box to label it. Click an existing colored mark to select or relabel it. Mark separate chips separately. Green = whitening; red = not whitening; amber = uncertain.</p>
 <div class="pixel-annotation-scroll"><canvas data-tool="canvas" aria-label="Draw labels on the selected card corner"></canvas></div>
-<p><label><input type="checkbox" data-tool="complete"> I reviewed this whole corner and marked every whitening chip; unmarked areas are not whitening.</label></p>
-<p>Leave this unchecked for a partial review. Uncertain marks are never treated as clean.</p>
 <div class="pixel-annotation-tools">
 <label>Physical card group <input data-tool="group" value="{html.escape(r['listing'],quote=True)}" aria-label="Same physical card group"></label>
 <label>Use these labels for <select data-tool="split"><option value="development">Development / tuning</option><option value="validation">Reserved validation</option></select></label>

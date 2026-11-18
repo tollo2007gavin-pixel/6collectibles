@@ -69,7 +69,6 @@ function draw(editor){
 function refresh(editor){
  const {card,tools}=editor,size=tileSize(card),zoom=Number(tools.zoom.value);
  tools.canvas.width=size;tools.canvas.height=size;tools.canvas.style.width=(size*zoom)+'px';tools.canvas.style.height=(size*zoom)+'px';
- tools.complete.checked=card.complete_corners.includes(tools.corner.value);
  tools.group.value=card.group_id;tools.split.value=card.split;
  tools.group.disabled=groupLocked(card);tools.split.disabled=groupLocked(card);
  tools.status.textContent=(card.split==='validation'?'Reserved validation':'Development')+' · '+card.annotations.length+' labels · '+card.complete_corners.length+'/4 fully reviewed corners'+(card.previously_reviewed?' · Previously reviewed: development only.':'')+(card.result.analysis_mode!=='whitening_classification'?' · Marking is available, but tuning needs a run made with edge_classifier.':'');
@@ -129,7 +128,6 @@ for(const card of state.cards){
  const image=new Image();const editor={card,tools,image,history:[],selected:null,drag:null};editors.set(card.number,editor);
  image.onload=()=>refresh(editor);image.src=sheet.src;
  for(const key of ['corner','zoom','show-candidates'])tools[key].addEventListener('change',()=>{editor.selected=null;editor.drag=null;refresh(editor);});
- tools.complete.addEventListener('change',()=>{remember(editor);lockGroup(card);const corner=tools.corner.value;card.complete_corners=card.complete_corners.filter(x=>x!==corner);if(tools.complete.checked)card.complete_corners.push(corner);changed();refreshAll();});
  tools.group.addEventListener('change',()=>{const value=tools.group.value.trim();const other=state.cards.find(c=>c!==card&&c.group_id===value);if(!value||value.length>200||(other&&other.split!==card.split)){tools.status.textContent='Choose a nonempty group. Existing photos in that group must use the same split.';tools.group.value=card.group_id;return;}card.group_id=value;changed();refreshAll();});
  tools.split.addEventListener('change',()=>{if(groupLocked(card)){refresh(editor);return;}for(const c of relatedCards(card))c.split=tools.split.value;changed();refreshAll();});
  tools.undo.addEventListener('click',()=>{const old=editor.history.pop();if(old){Object.assign(card,old);editor.selected=null;changed();refreshAll();}});
