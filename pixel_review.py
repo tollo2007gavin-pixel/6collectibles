@@ -206,5 +206,9 @@ def main():
         (out/'review.html').write_text(page,encoding='utf-8')
 
 
+    from pixel_review_notes import add_review_notes
+    (out/'review.html').write_text(add_review_notes(page,results),encoding='utf-8')
+
+
 if __name__ == '__main__':
     main()
