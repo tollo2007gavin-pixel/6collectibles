@@ -1,5 +1,7 @@
 # Experimental four-corner inspection
 
+Reviews now include zoomable corner marking tools and portable human-label exports. See [Mark cards and compare improvements](PIXEL_LABELING.md) for the separate development-only tuning and frozen-validation GitHub workflow. The active detector is not automatically modified by these reports.
+
 ## Selective edge classification
 
 The GitHub strategy `edge_uncertainty` only marks candidate light spots; it does not run the whitening classifier. Select `edge_classifier` for the three-way classifications below. Reports explicitly name their analysis mode. Classifier reviews have a separate expandable orange overlay for inconclusive spots, including small possible chips. Those spots are not certified clean and are not discarded from review.

@@ -72,10 +72,14 @@ jobs:
           cache: pip
           cache-dependency-path: requirements_runner.txt
       - run: python -m pip install -r requirements_runner.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Validate options and test candidate evaluation offline
         run: |
           python -c "import os,json; from pixel_workflow import settings; settings(json.loads(os.environ['PIXEL_TEST_INPUTS']))"
           python -m unittest test_pixel_whitening test_blue_surround test_triangle_blue test_pixel_workflow test_detection_mode test_grain_filter test_edge_uncertainty test_interior_art test_edge_classifier test_patch_evidence
+          node test_pixel_annotations_ui.js
       - name: Download previous photos and sheets
         if: ${{ inputs.replay_run_id != '' }}
         uses: actions/download-artifact@v4

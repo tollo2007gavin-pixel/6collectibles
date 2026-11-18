@@ -67,6 +67,11 @@ class PixelWorkflowTests(unittest.TestCase):
                 self.assertEqual(data[1]['status'],'no_saved_corner_sheet')
                 self.assertEqual(data[0]['surrounding_blue_settings']['geometry'],'triangle' if shape=='classifier' else shape)
                 self.assertTrue(data[0]['edge_filter_enabled'])
+                portable=reviews[0].read_text(encoding='utf-8')
+                self.assertIn('id="pixel-annotation-state"',portable)
+                self.assertIn('id="pixel-editor-1"',portable)
+                self.assertNotIn('id="pixel-editor-2"',portable)
+                self.assertIn('pixel-whitening-labels-v1',portable)
                 if shape=='classifier':
                     self.assertIn('whitening_classification',data[0])
                     self.assertIn('Main images show likely-whitening classifications only.',reviews[0].read_text(encoding='utf-8'))

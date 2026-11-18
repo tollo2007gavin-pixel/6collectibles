@@ -1,0 +1,56 @@
+name: Learn from pixel whitening reviews
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Baseline = measure current rules; tune = development only; validate = frozen settings on reserved cards'
+        type: choice
+        options: [baseline, tune, validate]
+        default: baseline
+      dataset_path:
+        description: 'Repository folder or exported label JSON uploaded with Add file > Upload files'
+        type: string
+        default: review_labels
+      frozen_config:
+        description: 'Validation only: path to frozen configuration JSON from the development report'
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pixel-review-learning
+  cancel-in-progress: false
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PIXEL_TRAINING_INPUTS: ${{ toJSON(inputs) }}
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m pip install -r requirements_runner.txt
+      - name: Check labeling and validation safeguards
+        run: |
+          python -m unittest test_pixel_training test_pixel_training_workflow
+          node test_pixel_annotations_ui.js
+      - name: Compare saved measurements without API calls
+        run: python pixel_training_workflow.py
+      - name: Save reports and frozen settings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pixel-learning-report-${{ github.run_number }}
+          path: outputs/pixel_training/
+          if-no-files-found: warn
+          retention-days: 90

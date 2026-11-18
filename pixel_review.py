@@ -207,7 +207,8 @@ def main():
 
 
     from pixel_review_notes import add_review_notes
-    (out/'review.html').write_text(add_review_notes(page,results),encoding='utf-8')
+    from pixel_annotations import add_annotations
+    (out/'review.html').write_text(add_annotations(add_review_notes(page,results),results,batch),encoding='utf-8')
 
 
 if __name__ == '__main__':
