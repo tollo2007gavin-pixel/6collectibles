@@ -19,16 +19,16 @@ def add_annotations(page, results, batch):
             previously_reviewed=bool(note),result=r))
         number=r['number']
         editor=f'''<details class="pixel-annotation-editor" id="pixel-editor-{number}">
-<summary>Mark whitening, glare and missed chips</summary>
+<summary>Mark real whitening and missed chips</summary>
 <div class="pixel-annotation-tools">
 <label>Corner <select data-tool="corner"><option>TL</option><option>TR</option><option>BL</option><option>BR</option></select></label>
-<label>Mark as <select data-tool="label"><option value="whitening">Whitening</option><option value="not_whitening">Not whitening (glare / dust / background)</option><option value="uncertain">Uncertain — leave out of scoring</option></select></label>
+<label>Mark as <select data-tool="label"><option value="whitening">Whitening</option><option value="uncertain">Uncertain — leave out of scoring</option></select></label>
 <label>Zoom <select data-tool="zoom"><option value="1">1×</option><option value="1.5">1.5×</option><option value="2">2×</option><option value="3">3×</option></select></label>
 <label><input data-tool="show-candidates" type="checkbox" checked> Show candidate boxes</label>
 <button type="button" data-tool="undo">Undo last edit</button>
 <button type="button" data-tool="delete">Delete selected mark</button>
 </div>
-<p>Drag a tight rectangle around each chip or unwanted spot. Click a blue candidate box to label it. Click an existing colored mark to select or relabel it. Mark separate chips separately. Green = whitening; red = not whitening; amber = uncertain.</p>
+<p>Mark real whitening green: click a blue candidate box or draw around a missed chip. Untouched candidates on cards you mark or write notes on are treated as not whitening when exported. For a card with no chips, write "No whitening" in its notes. Cards with no marks and no notes stay unreviewed. Amber marks remain uncertain. Finish inspecting all four corners of each card you review before exporting.</p>
 <div class="pixel-annotation-scroll"><canvas data-tool="canvas" aria-label="Draw labels on the selected card corner"></canvas></div>
 <div class="pixel-annotation-tools">
 <label>Physical card group <input data-tool="group" value="{html.escape(r['listing'],quote=True)}" aria-label="Same physical card group"></label>

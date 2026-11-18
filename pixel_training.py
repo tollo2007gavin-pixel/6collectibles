@@ -129,6 +129,17 @@ def validate_cards(cards):
             if mark.get('corner') not in CORNERS or not box_valid(mark.get('box'),size):raise ValueError('Annotation outside its corner')
             if not isinstance(mark.get('id'),(str,int)) or str(mark['id']) in mark_ids:raise ValueError('Annotation IDs must be unique')
             mark_ids.add(str(mark['id']))
+        # Explicit export policy: untouched candidates on a reviewed card are
+        # negative. Drawn positives and uncertain regions take precedence.
+        if c.get('positive_only_review'):
+            if not marks and not str(c.get('notes','')).strip():
+                raise ValueError('Positive-only review requires marks or a note; untouched cards remain unreviewed')
+            for region in prediction_regions(r,DEFAULTS):
+                if any(matches(region,a) or (a.get('candidate_id')==region['id'] and a['corner']==region['corner']) for a in marks):continue
+                identifier='automatic-negative-'+str(region['id'])
+                if identifier in mark_ids:raise ValueError('Automatic annotation ID conflicts with a manual mark')
+                marks.append(dict(id=identifier,corner=region['corner'],box=region['box'],label='not_whitening',candidate_id=region['id'],origin='untouched_candidate'))
+                mark_ids.add(identifier)
         # Contradictory overlapping marks cannot silently hide false positives.
         for j,a in enumerate(marks):
             for b in marks[j+1:]:

@@ -31,6 +31,20 @@ def card(number=1,split='development'):
 
 
 class PixelTrainingTests(unittest.TestCase):
+    def test_positive_only_reviews_label_untouched_candidates_without_inventing_review(self):
+        c=card();c['result']['candidates'].append(candidate(2,200));c['positive_only_review']=True
+        checked=t.validate_cards([c])[0]
+        self.assertEqual([a['label'] for a in checked['annotations']],['whitening','not_whitening'])
+        self.assertEqual(t.score_cards([checked],DEFAULTS)['counts']['false_positive_marks'],1)
+        c['annotations']=[mark(1,50,'uncertain')]
+        checked=t.validate_cards([c])[0]
+        self.assertEqual(checked['annotations'][0]['label'],'uncertain')
+        c['annotations']=[]
+        with self.assertRaises(ValueError):t.validate_cards([c])
+        c['notes']='No whitening'
+        self.assertEqual(len(t.validate_cards([c])[0]['annotations']),2)
+
+
     def test_partial_review_does_not_invent_negatives_and_complete_corner_does(self):
         c=card();c['result']['candidates'].append(candidate(2,200))
         partial=t.score_cards([c],DEFAULTS)

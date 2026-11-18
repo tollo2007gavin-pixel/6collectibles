@@ -111,7 +111,7 @@ function validate(payload){
  return {schema,cards:validated};
 }
 function download(content,type,name){const url=URL.createObjectURL(new Blob([content],{type}));const a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);globalStatus.textContent='Download requested. Keep the downloaded file before closing.';}
-function exportData(){sync();download(JSON.stringify({...state,exported_at:new Date().toISOString()},null,2),'application/json','pixel-whitening-labels.json');}
+function exportData(){sync();const exported=deep(state);for(const c of exported.cards)c.positive_only_review=Boolean(c.annotations.length||c.notes.trim());download(JSON.stringify({...exported,exported_at:new Date().toISOString()},null,2),'application/json','pixel-whitening-labels.json');}
 function saveHtml(){
  sync();const copy=document.documentElement.cloneNode(true);
  for(const c of state.cards){const n=copy.querySelector('#pixel-note-'+c.number);if(n)n.textContent=c.notes;}
