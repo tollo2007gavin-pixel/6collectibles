@@ -111,7 +111,19 @@ function validate(payload){
  return {schema,cards:validated};
 }
 function download(content,type,name){const url=URL.createObjectURL(new Blob([content],{type}));const a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);globalStatus.textContent='Download requested. Keep the downloaded file before closing.';}
-function exportData(){sync();const exported=deep(state);for(const c of exported.cards)c.positive_only_review=Boolean(c.annotations.length||c.notes.trim());download(JSON.stringify({...exported,exported_at:new Date().toISOString()},null,2),'application/json','pixel-whitening-labels.json');}
+async function exportData(){
+ sync();const exported=deep(state);
+ for(const c of exported.cards)c.positive_only_review=Boolean(c.annotations.length||c.notes.trim());
+ const text=JSON.stringify({...exported,exported_at:new Date().toISOString()});
+ try{
+  if(typeof CompressionStream!=='undefined'){
+   const stream=new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'));
+   const packed=await new Response(stream).arrayBuffer();
+   download(packed,'application/gzip','pixel-whitening-labels.json.gz');return;
+  }
+ }catch(error){globalStatus.textContent='Compression unavailable; exporting ordinary JSON.';}
+ download(text,'application/json','pixel-whitening-labels.json');
+}
 function saveHtml(){
  sync();const copy=document.documentElement.cloneNode(true);
  for(const c of state.cards){const n=copy.querySelector('#pixel-note-'+c.number);if(n)n.textContent=c.notes;}
@@ -163,7 +175,7 @@ document.getElementById('pixel-label-reserve').addEventListener('click',()=>{
  changed();refreshAll();globalStatus.textContent='Reserved '+reserved+' of '+eligible+' eligible groups. Small batches may differ from 30%. Previously reviewed groups were left alone. Save this assignment before labeling.';
 });
 document.getElementById('pixel-label-import').addEventListener('change',async e=>{
- try{const file=e.target.files[0];if(!file)return;const incoming=validate(JSON.parse(await file.text()));
+ try{const file=e.target.files[0];if(!file)return;const incoming=validate(JSON.parse(file.name?.endsWith('.gz')?await new Response(file.stream().pipeThrough(new DecompressionStream('gzip'))).text():await file.text()));
   if(!confirm('Replace this page’s current markings with the imported labels? Save current work first if needed.'))return;
   // Keep existing objects: canvas handlers retain their card references.
   for(const card of state.cards){const imported=incoming.cards.find(c=>c.number===card.number);Object.assign(card,imported);const ed=editors.get(card.number);if(ed){ed.history=[];ed.selected=null;}const n=document.getElementById('pixel-note-'+card.number);if(n)n.value=card.notes;}

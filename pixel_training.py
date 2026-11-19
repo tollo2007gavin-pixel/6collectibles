@@ -4,6 +4,7 @@ The cache fixes candidate extraction and patch measurements. This tool tunes onl
 core classifier thresholds. Validation is a separate, frozen-configuration action.
 """
 import argparse
+import gzip
 import copy
 import hashlib
 import json
@@ -169,10 +170,10 @@ def validate_cards(cards):
 
 
 def load_dataset(path):
-    path=Path(path);files=sorted(path.glob('*.json')) if path.is_dir() else [path]
+    path=Path(path);files=sorted([*path.glob('*.json'),*path.glob('*.json.gz')]) if path.is_dir() else [path]
     cards=[]
     for file in files:
-        data=json.loads(file.read_text(encoding='utf-8-sig'),parse_constant=lambda value:(_ for _ in ()).throw(ValueError('Non-finite JSON number')))
+        data=json.loads((gzip.decompress(file.read_bytes()).decode('utf-8-sig') if file.name.endswith('.json.gz') else file.read_text(encoding='utf-8-sig')),parse_constant=lambda value:(_ for _ in ()).throw(ValueError('Non-finite JSON number')))
         if not isinstance(data,dict):raise ValueError(f'Expected a labeled dataset object: {file.name}')
         if data.get('schema') in (CONFIG_SCHEMA,EXPOSURE_SCHEMA):continue
         if data.get('schema')!=SCHEMA:raise ValueError(f'Not a labeled pixel dataset: {file.name}')

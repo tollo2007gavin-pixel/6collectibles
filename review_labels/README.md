@@ -1,3 +1,5 @@
+> Uploads now use **Export small upload file**, which downloads `.json.gz` in supported browsers. Upload that file directly without extracting it. Ordinary `.json` remains supported. Compression reduces browser upload and rendering overhead; it cannot guarantee against browser or GitHub outages.
+
 # Upload your exported labels here
 
 In a pixel inspection review, mark chips and false alarms, then choose **Export labeled dataset**. Upload those JSON files to this folder using GitHub's **Add file → Upload files**. Keep files from different batches under different names.

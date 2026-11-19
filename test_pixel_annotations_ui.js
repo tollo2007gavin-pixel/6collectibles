@@ -2,7 +2,7 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert');
 const script=fs.readFileSync(__dirname+'/pixel_annotations.js','utf8');
 const base={schema:'pixel-whitening-labels-v1',cards:[1,2].map(number=>({number,listing:'listing-'+number,source_sha256:'hash-'+number,group_id:'listing-'+number,split:'development',notes:'',complete_corners:[],annotations:[],previously_reviewed:false,result:{analysis_mode:'whitening_classification',measurement_image_size:[1010,1050],candidates:[{id:1,corner:'TL',box_in_corner:[100,100,10,10]}],excluded_candidates:[],whitening_classification:{decisions:[{id:1,classification:'likely_whitening',reason:'strong_card_associated_edge_patch'}]}}}))};
-function boot(input=base){
+function boot(input=base,compression=false){
  const elements={},downloads=[];
  function element(){return {value:'',textContent:'',checked:false,disabled:false,style:{},dataset:{},children:[],handlers:{},files:[],
   addEventListener(name,fn){(this.handlers[name]??=[]).push(fn)},
@@ -20,6 +20,7 @@ function boot(input=base){
   editor.closest=()=>({querySelector:()=>({src:'data:image/png;base64,AA=='})});
  }
  const ctx={document:{getElementById:get,createElement:element,body:element(),documentElement:{cloneNode(){const saved={};return {querySelector(selector){return saved[selector]??=(Object.assign(element(),{textContent:get(selector.slice(1)).textContent}))},get outerHTML(){return '<html><script id="pixel-annotation-state" type="application/json">'+saved['#pixel-annotation-state'].textContent+'</script></html>';}}}}},Image:class{constructor(){this.complete=false}set src(v){this.complete=true;this.onload?.()}},Blob,URL:{createObjectURL:b=>{downloads.push(b);return 'blob:test'},revokeObjectURL(){}},setTimeout:f=>f(),confirm:()=>true,Date,Math,window:{}};
+ if(compression)Object.assign(ctx,{CompressionStream,DecompressionStream,Response});
  vm.createContext(ctx);vm.runInContext(script,ctx);
  return {get,downloads,api:ctx.window.pixelAnnotationTools,tools:n=>get('pixel-editor-'+n).tools};
 }
@@ -58,5 +59,6 @@ function boot(input=base){
  const duplicate=structuredClone(base);duplicate.cards[1].listing=duplicate.cards[0].listing;t=boot(duplicate);tools=t.tools(1);tools.split.value='validation';await tools.split.fire('change');assert(t.api.getState().cards.every(c=>c.split==='validation'));
  await t.get('pixel-label-retire').fire('click');assert(t.api.getState().cards.every(c=>c.split==='development'&&c.previously_reviewed));
  const retired=t.api.getState();retired.cards[0].split='validation';assert.throws(()=>t.api.validate(retired));
+ const compressed=boot(base,true);await compressed.get('pixel-label-export').fire('click');const zipped=Buffer.from(await compressed.downloads.at(-1).arrayBuffer());assert.equal(JSON.parse(require('zlib').gunzipSync(zipped).toString()).schema,base.schema);
  console.log('Annotation UI passed: candidate clicks, zoomed coordinates, labels, completeness, immutable split after review, notes/HTML round trip, import/edit/export, malformed labels and same-card grouping.');
 })().catch(e=>{console.error(e);process.exitCode=1});

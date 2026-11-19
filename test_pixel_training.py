@@ -31,6 +31,15 @@ def card(number=1,split='development'):
 
 
 class PixelTrainingTests(unittest.TestCase):
+    def test_compressed_labels_load_identically(self):
+        import gzip
+        c=card()
+        with tempfile.TemporaryDirectory() as directory:
+            p=Path(directory)/'labels.json.gz'
+            p.write_bytes(gzip.compress(json.dumps({'schema':t.SCHEMA,'cards':[c]}).encode()))
+            self.assertEqual(t.load_dataset(p),t.validate_cards([c]))
+            self.assertEqual(t.load_dataset(Path(directory)),t.validate_cards([c]))
+
     def test_positive_only_reviews_label_untouched_candidates_without_inventing_review(self):
         c=card();c['result']['candidates'].append(candidate(2,200));c['positive_only_review']=True
         checked=t.validate_cards([c])[0]

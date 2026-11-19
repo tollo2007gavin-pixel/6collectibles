@@ -1,3 +1,5 @@
+> Uploads now use **Export small upload file**, which downloads `.json.gz` in supported browsers. Upload that file directly without extracting it. Ordinary `.json` remains supported. Compression reduces browser upload and rendering overhead; it cannot guarantee against browser or GitHub outages.
+
 # Mark cards and compare improvements
 
 This system turns your review marks into reusable data. It does not infer labels from notes, filenames or an earlier model's answer. It makes no OpenAI calls. GitHub Actions runtime remains subject to your GitHub plan.

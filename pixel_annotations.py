@@ -42,10 +42,10 @@ def add_annotations(page, results, batch):
     controls='''<div id="pixel-annotation-controls">
 <strong>Whitening labels</strong>
 <button type="button" id="pixel-label-save">Save marked review with photos</button>
-<button type="button" id="pixel-label-export">Export labeled dataset JSON</button>
+<button type="button" id="pixel-label-export">Export small upload file</button>
 <button type="button" id="pixel-label-reserve">Reserve about 30% of unreviewed card groups</button>
 <button type="button" id="pixel-label-retire">Move reserved cards to development</button>
-<label>Import labels <input type="file" id="pixel-label-import" accept=".json,application/json"></label>
+<label>Import labels <input type="file" id="pixel-label-import" accept=".json,.gz,application/json,application/gzip"></label>
 <p id="pixel-label-status" role="status">Open a card's marking editor below. Save before closing. No data is sent to a server.</p>
 </div>'''
     page=page.replace('<div id="pixel-review-notes-controls"',controls+'<div id="pixel-review-notes-controls"',1)
