@@ -24,12 +24,25 @@ def settings(inputs, root=ROOT):
         raise ValueError('Upload your exported label JSON into review_labels first')
     config=None
     if mode=='validate':
+        run_id=str(inputs.get('tune_run_id','')).strip()
         name=str(inputs.get('frozen_config','')).strip()
+        if run_id and not run_id.isdigit():
+            raise ValueError('Tune workflow run ID must contain digits only')
+        if run_id and name:
+            raise ValueError('Enter either the tune run ID or a repository config path, not both')
+        if run_id:
+            config=local('tune_config')
+            return mode,dataset,config
         if not name:
-            raise ValueError('Validation requires the frozen configuration from a completed development run')
+            raise ValueError('Validation requires a successful tune run ID or a frozen config path')
         config=local(name)
+        if config.is_dir():
+            matches=list(config.rglob('frozen-config.json'))
+            if len(matches)!=1:
+                raise ValueError(f'Expected one frozen-config.json from the selected tune artifact; found {len(matches)}')
+            config=matches[0]
         if not config.is_file():
-            raise ValueError('Upload the frozen configuration JSON before validation')
+            raise ValueError('The selected tune artifact does not contain frozen-config.json; choose a successful tune run')
     return mode,dataset,config
 
 
@@ -38,7 +51,12 @@ def main():
     output=ROOT/'outputs'/'pixel_training'/datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S_%f')
     output.parent.mkdir(parents=True,exist_ok=True)
     command=[sys.executable,str(ROOT/'pixel_training.py'),mode,'--dataset',str(dataset),'--out',str(output)]
-    if config is not None:command+=['--config',str(config)]
+    if config is not None:
+        if config.is_dir():
+            matches=list(config.rglob('frozen-config.json'))
+            if len(matches)!=1:raise ValueError(f'Expected one frozen-config.json from the selected tune artifact; found {len(matches)}')
+            config=matches[0]
+        command+=['--config',str(config)]
     subprocess.run(command,cwd=ROOT,check=True)
     message=('## Pixel review learning report\n\n'
              f'Mode: **{mode}**. Download the **pixel-learning-report** artifact for the comparison and configuration.\n\n'

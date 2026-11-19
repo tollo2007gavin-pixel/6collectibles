@@ -44,7 +44,7 @@ Tuning needs at least three reviewed physical-card groups, three positive region
 
 ## 3. Validate without using the answers to tune
 
-Finish development first. Upload its `frozen-config.json` into `review_labels`, then choose **validate** and enter `review_labels/frozen-config.json` as the configuration path. The program checks code/configuration compatibility and rejects training/validation overlap through image hashes, normalized listing IDs and physical-card groups, including transitive links.
+Finish development first. In **validate**, enter the successful tune workflow run ID in **tune_run_id**. The workflow downloads its frozen configuration automatically. Alternatively, enter a repository path in **frozen_config**. The program checks code/configuration compatibility and rejects training/validation overlap through image hashes, normalized listing IDs and physical-card groups, including transitive links.
 
 Validation outputs `validation-exposure.json`. Save it back into `review_labels` alongside your exports. Later validation runs read these records and refuse to treat the same cards as fresh validation. Preserve records from different validations under distinct filenames. If you discard a record or evaluate outside this system, the tool cannot know the answers were previously used. Re-running a report on the same reserved examples is not a new independent trial.
 

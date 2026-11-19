@@ -12,13 +12,18 @@ on:
         description: 'Repository folder or exported label JSON uploaded with Add file > Upload files'
         type: string
         default: review_labels
+      tune_run_id:
+        description: 'Validation only: ID of the successful tune workflow run; its frozen settings are downloaded automatically'
+        type: string
+        default: ''
       frozen_config:
-        description: 'Validation only: path to frozen configuration JSON from the development report'
+        description: 'Optional validation alternative: repository path to an already uploaded frozen-config.json'
         type: string
         default: ''
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: pixel-review-learning
@@ -44,6 +49,15 @@ jobs:
         run: |
           python -m unittest test_pixel_training test_pixel_training_workflow
           node test_pixel_annotations_ui.js
+      - name: Download frozen settings from the tune run
+        if: ${{ inputs.mode == 'validate' && inputs.tune_run_id != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.tune_run_id }}
+          pattern: pixel-learning-report-*
+          path: tune_config
+          merge-multiple: true
       - name: Compare saved measurements without API calls
         run: python pixel_training_workflow.py
       - name: Save reports and frozen settings
