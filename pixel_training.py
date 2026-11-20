@@ -143,10 +143,19 @@ def validate_cards(cards):
                 marks.append(dict(id=identifier,corner=region['corner'],box=region['box'],label='not_whitening',candidate_id=region['id'],origin='untouched_candidate'))
                 mark_ids.add(identifier)
         # Contradictory overlapping marks cannot silently hide false positives.
+        clicked_boxes = {(region['id'], region['corner'], tuple(region['box']))
+                         for region in reviewed_candidate_boxes(r)}
         for j,a in enumerate(marks):
             for b in marks[j+1:]:
-                if matches(a,b) and a['label']!=b['label']:raise ValueError('Conflicting labels overlap; adjust or remove one mark')
-                if matches(a,b) and a['label']==b['label']=='whitening':raise ValueError('Overlapping whitening marks may count one chip twice')
+                if not matches(a,b):continue
+                if a['label']!=b['label']:raise ValueError('Conflicting labels overlap; adjust or remove one mark')
+                if a['label']==b['label']=='whitening':
+                    # The editor snaps clicks to candidate rectangles. Two
+                    # neighboring candidates can share a sliver of both boxes.
+                    distinct_clicks = a.get('candidate_id') != b.get('candidate_id') and all(
+                        (m.get('candidate_id'), m['corner'], tuple(m['box'])) in clicked_boxes for m in (a,b))
+                    if distinct_clicks and overlap(a['box'],b['box'])[0] < .25:continue
+                    raise ValueError('Overlapping whitening marks may count one chip twice')
         c['annotations']=marks
         digest(c)  # rejects NaN/Infinity anywhere in supplied features
         for alias in aliases(c):

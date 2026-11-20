@@ -91,6 +91,16 @@ class PixelTrainingTests(unittest.TestCase):
         self.assertEqual(r['counts']['true_positive_regions'],1)
         self.assertEqual(r['counts']['false_negative_regions'],1)
 
+    def test_neighboring_clicked_candidates_can_partly_overlap(self):
+        c = card()
+        boxes = [[361,387,8,10], [348,391,22,14]]
+        c['result']['candidates'] = [dict(candidate(i), box_in_corner=box) for i,box in enumerate(boxes,1)]
+        c['annotations'] = [dict(mark(i), box=box, candidate_id=i) for i,box in enumerate(boxes,1)]
+        self.assertEqual(len(t.validate_cards([c])[0]['annotations']), 2)
+        c['annotations'][1]['box'] = boxes[0]
+        with self.assertRaisesRegex(ValueError, 'may count one chip twice'):
+            t.validate_cards([c])
+
     def test_no_candidate_and_abstaining_candidate_have_different_miss_counts(self):
         c=card();c['result']['candidates'][0]['area_at_500px']=3;c['annotations'].append(mark(2,200))
         r=t.score_cards([c],DEFAULTS)
