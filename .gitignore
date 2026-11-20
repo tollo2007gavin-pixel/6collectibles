@@ -17,3 +17,5 @@ shortlist_review/
 prepared_inputs/
 outputs/
 labels.csv
+.detector-venv/
+detector_workspace/

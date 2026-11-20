@@ -29,7 +29,7 @@ function candidates(card,corner){
 }
 function captureNotes(){for(const c of state.cards){const note=document.getElementById('pixel-note-'+c.number);if(note)c.notes=note.value;}}
 function sync(){captureNotes();embedded.textContent=safeJson(state);}
-function changed(){globalStatus.textContent='Unsaved changes. Download boxes for GitHub or save the marked review to keep editing later.';}
+function changed(){globalStatus.textContent='Unsaved changes. Choose Save for detector training to keep your boxes with their photos.';}
 function snapshot(card){return {annotations:deep(card.annotations),complete_corners:[...card.complete_corners]};}
 function remember(editor){editor.history.push(snapshot(editor.card));if(editor.history.length>100)editor.history.shift();}
 function relatedCards(card){
@@ -134,8 +134,9 @@ function saveHtml(){
  for(const c of state.cards){const n=copy.querySelector('#pixel-note-'+c.number);if(n)n.textContent=c.notes;}
  copy.querySelector('#pixel-annotation-state').textContent=safeJson(state);
  copy.querySelector('#pixel-label-status').textContent='Saved markings loaded. Save again after editing.';
- download(new Blob(['<!doctype html>\n',copy.outerHTML],{type:'text/html;charset=utf-8'}),'reviewed-pixel-markings.html');
- globalStatus.textContent='Photo backup saved to Downloads. To send your boxes to GitHub, click “1. Download boxes for GitHub” above.';
+ const name='reviewed-pixel-markings'+(initial.batch_key?'-'+initial.batch_key:'')+'.html';
+ download(new Blob(['<!doctype html>\n',copy.outerHTML],{type:'text/html;charset=utf-8'}),name);
+ globalStatus.textContent='Move '+name+' from Downloads to detector_workspace/reviews for local detector training.';
 }
 // Validate embedded saved state too. Result snapshots remain the original report's data.
 state=validate(state);

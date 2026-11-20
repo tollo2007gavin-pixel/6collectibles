@@ -44,13 +44,13 @@ def add_annotations(page, results, batch):
     controls='''<div id="pixel-annotation-controls">
 <strong>Review the batch</strong>
 <p>Open <b>Draw whitening boxes</b> on each card. Fresh card groups are automatically split for learning and checking. Review both groups the same way.</p>
+<button type="button" id="pixel-label-save">Save for detector training (.html)</button>
+<p>Move the downloaded photo review into the local trainer's <b>detector_workspace/reviews</b> folder. It includes the corner images and your boxes and can be reopened for editing.</p>
+<details><summary>Compare pixel rules on GitHub</summary>
 <button type="button" id="pixel-label-export">1. Download boxes for GitHub</button>
 <p><a href="https://github.com/tollo2007gavin-pixel/6collectibles/upload/main/review_labels" target="_blank" rel="noopener noreferrer">2. Upload the downloaded boxes file</a>. Choose the file starting with <b>pixel-whitening-labels</b> and commit it to <b>main</b>. Leave it compressed.</p>
-<p id="pixel-label-status" role="status"></p>
-<details><summary>Keep an editable photo backup on this computer</summary>
-<p>The HTML includes all card photos and your boxes. Open it again to resume editing or download the boxes for GitHub.</p>
-<button type="button" id="pixel-label-save">Save local photo backup (.html)</button>
 </details>
+<p id="pixel-label-status" role="status"></p>
 <details><summary>Review options</summary>
 <button type="button" id="pixel-label-reserve">Reserve about 30% of unreviewed card groups</button>
 <button type="button" id="pixel-label-retire">Move reserved cards to development</button>
@@ -76,7 +76,7 @@ def add_annotations(page, results, batch):
 .pixel-annotation-scroll{overflow:auto;max-height:75vh;background:#ddd;border:1px solid #aaa}
 .pixel-annotation-scroll canvas{display:block;touch-action:none;max-width:none;max-height:none;cursor:crosshair}
 #pixel-annotation-controls{padding:12px;background:#e9f3fa;border:1px solid #779;margin:12px 0}
-#pixel-label-export{padding:8px 14px;background:#175a37;color:white;border:0;border-radius:4px;font-weight:600;cursor:pointer}
+#pixel-label-save{padding:8px 14px;background:#175a37;color:white;border:0;border-radius:4px;font-weight:600;cursor:pointer}
 .pixel-annotation-editor li button{margin-left:8px}
 </style>'''
     return page+style+'<script id="pixel-annotation-state" type="application/json">'+data+'</script><script>'+script+'</script>'

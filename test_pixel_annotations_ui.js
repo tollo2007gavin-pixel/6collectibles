@@ -41,7 +41,7 @@ function boot(input=base,compression=false){
  assert(t.get('pixel-label-status').textContent.includes('pixel-whitening-labels.json ('));
  await t.get('pixel-label-save').fire('click');const html=await t.downloads.at(-1).text();const restored=JSON.parse(html.match(/<script id="pixel-annotation-state" type="application\/json">(.*?)<\/script>/s)[1]);
  assert.equal(restored.cards[0].annotations.length,1);assert.equal(restored.cards[0].notes,'Chip </script> and </textarea>');
- assert(t.get('pixel-label-status').textContent.includes('Photo backup'));
+ assert(t.get('pixel-label-status').textContent.includes('reviewed-pixel-markings.html from Downloads to detector_workspace/reviews'));
  t=boot(restored);assert.equal(t.api.getState().cards[0].annotations.length,1);
  // Import reuses live card objects: further canvas edits must affect exported state.
  t=boot();t.get('pixel-label-import').files=[{text:async()=>JSON.stringify(exported)}];await t.get('pixel-label-import').fire('change');
@@ -74,6 +74,7 @@ function boot(input=base,compression=false){
  const saved=JSON.parse((await first.downloads.at(-1).text()).match(/<script id="pixel-annotation-state" type="application\/json">(.*?)<\/script>/s)[1]);
  assert.equal(boot(saved).api.getState().cards.find(c=>c.number===reservedCard.number).split,'development');
  assert.equal(saved.batch_key,'71a6f2da');
+ assert(first.get('pixel-label-status').textContent.includes('reviewed-pixel-markings-71a6f2da.html'));
  const compressed=boot(base,true);await compressed.get('pixel-label-export').fire('click');const zipped=Buffer.from(await compressed.downloads.at(-1).arrayBuffer());assert.equal(JSON.parse(require('zlib').gunzipSync(zipped).toString()).schema,base.schema);
  assert(compressed.get('pixel-label-status').textContent.includes('pixel-whitening-labels.json.gz ('));
  console.log('Annotation UI passed: candidate clicks, zoomed coordinates, labels, completeness, immutable split after review, notes/HTML round trip, import/edit/export, malformed labels and same-card grouping.');
