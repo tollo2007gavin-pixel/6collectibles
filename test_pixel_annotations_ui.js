@@ -59,6 +59,19 @@ function boot(input=base,compression=false){
  const duplicate=structuredClone(base);duplicate.cards[1].listing=duplicate.cards[0].listing;t=boot(duplicate);tools=t.tools(1);tools.split.value='validation';await tools.split.fire('change');assert(t.api.getState().cards.every(c=>c.split==='validation'));
  await t.get('pixel-label-retire').fire('click');assert(t.api.getState().cards.every(c=>c.split==='development'&&c.previously_reviewed));
  const retired=t.api.getState();retired.cards[0].split='validation';assert.throws(()=>t.api.validate(retired));
+ // Reserve fresh groups on page open and preserve the assignment in saved HTML.
+ const fresh=structuredClone(base);fresh.auto_reserve=true;fresh.batch_key='71a6f2da';
+ fresh.cards=Array.from({length:20},(_,i)=>({...structuredClone(base.cards[0]),number:i+1,group_id:'card-'+i,listing:'card-'+i,source_sha256:'source-'+i}));
+ fresh.cards[1].source_sha256=fresh.cards[0].source_sha256;fresh.cards[0].previously_reviewed=true;
+ const first=boot(fresh),opened=first.api.getState();
+ assert.equal(opened.cards[1].split,'development');
+ assert(opened.cards.some(c=>c.split==='validation'));
+ assert.equal(JSON.stringify(opened.cards.map(c=>c.split)),JSON.stringify(boot(fresh).api.getState().cards.map(c=>c.split)));
+ const reservedCard=opened.cards.find(c=>c.split==='validation'),manual=first.tools(reservedCard.number);
+ manual.split.value='development';await manual.split.fire('change');await first.get('pixel-label-save').fire('click');
+ const saved=JSON.parse((await first.downloads.at(-1).text()).match(/<script id="pixel-annotation-state" type="application\/json">(.*?)<\/script>/s)[1]);
+ assert.equal(boot(saved).api.getState().cards.find(c=>c.number===reservedCard.number).split,'development');
+ assert.equal(saved.batch_key,'71a6f2da');
  const compressed=boot(base,true);await compressed.get('pixel-label-export').fire('click');const zipped=Buffer.from(await compressed.downloads.at(-1).arrayBuffer());assert.equal(JSON.parse(require('zlib').gunzipSync(zipped).toString()).schema,base.schema);
  console.log('Annotation UI passed: candidate clicks, zoomed coordinates, labels, completeness, immutable split after review, notes/HTML round trip, import/edit/export, malformed labels and same-card grouping.');
 })().catch(e=>{console.error(e);process.exitCode=1});

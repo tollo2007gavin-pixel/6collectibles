@@ -35,7 +35,7 @@ def settings(inputs):
     art=inputs.get('exclude_interior_art',True)
     if type(art) is not bool:
         raise ValueError('Interior art exclusion must be a boolean')
-    strategy=inputs.get('candidate_strategy','edge_uncertainty')
+    strategy=inputs.get('candidate_strategy','edge_classifier')
     if strategy not in ('edge_uncertainty','legacy','edge_classifier'):
         raise ValueError('Unknown candidate strategy')
     if type(grain) is not bool:
@@ -115,10 +115,11 @@ def main():
              f"Retained {summary['retained_candidates']}; excluded {summary['excluded_candidates']}. "
              "Counts are not accuracy. No whitening API calls.\n\n"
              "Download the card-results-pixel artifact and open candidate_review/review.html "
-             "inside its run folder. Red = retained, green = excluded, cyan = sampled shape. "
+             "inside its run folder. "
              "settings.json and results.json record the experiment.\n")
     message+=f"\nCandidate strategy: **{config['candidate_strategy']}**. Choose legacy to restore the pre-edge-filter logic.\n"
     if 'classification_counts' in summary:
+        message+='\nOpen **Draw whitening boxes** on each card. When finished, choose **Download boxes for GitHub** and use the upload link in the review.\n'
         message+='\nExperimental classifications: '+json.dumps(summary['classification_counts'])+'. Inconclusive is not clean.\n'
     (output/'README.md').write_text(message,encoding='utf-8')
     if os.environ.get('GITHUB_STEP_SUMMARY'):

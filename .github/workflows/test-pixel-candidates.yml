@@ -6,8 +6,8 @@ on:
       candidate_strategy:
         description: 'edge_classifier = whitening/artifact/inconclusive; edge_uncertainty = candidate marks only'
         type: choice
-        options: [edge_uncertainty, edge_classifier, legacy]
-        default: edge_uncertainty
+        options: [edge_classifier, edge_uncertainty, legacy]
+        default: edge_classifier
       geometry:
         description: 'Candidate sampling shape (no whitening API)'
         type: choice

@@ -1,0 +1,55 @@
+name: Use validated pixel settings
+
+on:
+  workflow_dispatch:
+    inputs:
+      comparison_run_id:
+        description: 'Paste the run ID from the report that recommended the update'
+        type: string
+        required: true
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  apply:
+    if: github.ref_name == github.event.repository.default_branch && github.ref_type == 'branch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      RUN_ID: ${{ inputs.comparison_run_id }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - name: Verify the source comparison
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! [[ "$RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::Enter the numeric improvement run ID."
+            exit 1
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" |
+            jq -e --arg branch "$DEFAULT_BRANCH" --arg repo "$GITHUB_REPOSITORY" '
+              .status == "completed" and .conclusion == "success" and
+              .path == ".github/workflows/improve-pixel-whitening.yml" and
+              .head_branch == $branch and .head_repository.full_name == $repo and
+              (.event == "push" or .event == "workflow_dispatch")'
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.comparison_run_id }}
+          name: pixel-improvement-${{ inputs.comparison_run_id }}
+          path: ${{ runner.temp }}/pixel-comparison
+      - name: Apply the validated settings
+        run: |
+          python3 promote_pixel_settings.py "$RUNNER_TEMP/pixel-comparison" "$RUN_ID"
+          git add -- pixel_active_settings.json
+          if ! git diff --cached --quiet; then
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "Use validated pixel settings from run $RUN_ID"
+            git push origin "HEAD:refs/heads/$DEFAULT_BRANCH"
+          fi
+          echo "Pixel inspections now use the settings from [comparison $RUN_ID]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$RUN_ID)." >> "$GITHUB_STEP_SUMMARY"

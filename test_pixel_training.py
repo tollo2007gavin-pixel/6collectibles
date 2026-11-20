@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import pixel_training as t
 from edge_classifier import DEFAULTS,VERSION,classify
@@ -31,6 +32,11 @@ def card(number=1,split='development'):
 
 
 class PixelTrainingTests(unittest.TestCase):
+    def setUp(self):
+        live = patch.object(t, 'active_thresholds', return_value=dict(DEFAULTS))
+        self.live = live.start()
+        self.addCleanup(live.stop)
+
     def test_compressed_labels_load_identically(self):
         import gzip
         c=card()
@@ -147,6 +153,61 @@ class PixelTrainingTests(unittest.TestCase):
         self.assertEqual(report['selection_status'],'insufficient_labels')
         self.assertEqual(config['core_thresholds'],DEFAULTS)
         self.assertEqual(report['trials'],[])
+
+    def reserved(self, numbers=(4, 5, 6), contrast=21):
+        cards = [card(n, 'validation') for n in numbers]
+        for c in cards:
+            c['result']['candidates'].append(candidate(2, 200, contrast))
+            c['annotations'].append(mark(2, 200, 'not_whitening'))
+        return cards
+
+    def test_improve_pairs_the_same_cards_and_retires_exposure(self):
+        reviewed = t.validate_cards(self.development() + self.reserved())
+        report, files = t.improve(reviewed)
+        self.assertEqual(report['decision'], 'recommend_update')
+        self.assertEqual((report['chips_found_change'], report['false_alarms_change']), (0, -3))
+        self.assertEqual(report['live']['counts']['true_positive_regions'], 3)
+        self.assertEqual(files['recommended-settings.json'], files['frozen-config.json']['core_thresholds'])
+        record = files['validation-exposure.json']
+        again, files = t.improve(reviewed, [record])
+        self.assertEqual((again['decision'], again['development_cards']), ('need_fresh_cards', 6))
+        self.assertNotIn('validation-exposure.json', files)
+
+    def test_holdout_tie_and_insufficient_evidence_do_not_recommend(self):
+        reviewed = self.development() + self.reserved(contrast=30)
+        report, files = t.improve(t.validate_cards(reviewed))
+        self.assertEqual(report['decision'], 'keep_current')
+        self.assertNotIn('recommended-settings.json', files)
+        for c in reviewed[-3:]:
+            c['annotations'] = c['annotations'][:1]
+        report, files = t.improve(t.validate_cards(reviewed))
+        self.assertEqual(report['decision'], 'need_fresh_cards')
+        self.assertNotIn('validation-exposure.json', files)
+        self.assertNotIn('recommended-settings.json', files)
+
+    def test_no_development_improvement_preserves_reserved_cards(self):
+        reviewed = self.development() + self.reserved()
+        for c in reviewed[:3]:
+            c['result']['candidates'][1]['reason_code'] = 'A'
+        report, files = t.improve(t.validate_cards(reviewed))
+        self.assertEqual(report['decision'], 'keep_current')
+        self.assertEqual(report['validation_cards'], 0)
+        self.assertNotIn('validation-exposure.json', files)
+
+    def test_next_cycle_uses_the_previously_approved_thresholds(self):
+        self.live.return_value = dict(DEFAULTS, contrast_floor=24)
+        report, files = t.improve(t.validate_cards(self.development() + self.reserved()))
+        self.assertEqual(report['active_thresholds']['contrast_floor'], 24)
+        self.assertEqual(report['development']['baseline']['counts']['false_positive_marks'], 0)
+        self.assertEqual(report['decision'], 'keep_current')
+        self.assertNotIn('recommended-settings.json', files)
+
+    def test_retire_transitively_exposed_cards(self):
+        a, b, c = self.reserved()
+        b['group_id'] = a['group_id']
+        c['listing'] = b['listing']
+        groups = t.retire_exposed_groups([a, c, b], [{'exposed_aliases':['image:' + a['source_sha256']]}])
+        self.assertEqual({row['split'] for row in groups}, {'development'})
 
     def test_frozen_validation_refuses_mutated_config_training_overlap_and_exposure_reuse(self):
         _,config=t.calibrate(self.development());reserved=card(4,'validation')

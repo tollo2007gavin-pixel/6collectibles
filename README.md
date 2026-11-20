@@ -1,5 +1,7 @@
 # Six Collectibles – listing pipeline
 
+**Improve pixel whitening with your own boxes.** Run **Test pixel whitening candidates**, mark the chips in the downloaded review, and upload the small review export. GitHub compares proposed settings with the current detector on fresh reserved cards. [Box review instructions](PIXEL_LABELING.md)
+
 ## Start here: one configurable runner
 
 Use **[run_cards.py](run_cards.py)** for centering only, reviewed Luna whitening only,

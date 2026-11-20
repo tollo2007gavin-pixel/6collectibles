@@ -21,7 +21,7 @@ class PixelWorkflowTests(unittest.TestCase):
         self.assertEqual(inputs['pipeline'],'detection')
         self.assertTrue(inputs['prepare_api_only'])
         self.assertEqual(inputs['max_whitening_cards'],0)
-        self.assertEqual(c['candidate_strategy'],'edge_uncertainty')
+        self.assertEqual(c['candidate_strategy'],'edge_classifier')
         self.assertEqual(w.settings({'candidate_strategy':'edge_classifier'})['candidate_strategy'],'edge_classifier')
         self.assertEqual(w.settings({'candidate_strategy':'legacy'})['candidate_strategy'],'legacy')
         for bad in [{'geometry':'oops'},{'size_pixels':'nan'},{'blue_percentage':'0'},

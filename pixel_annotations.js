@@ -29,7 +29,7 @@ function candidates(card,corner){
 }
 function captureNotes(){for(const c of state.cards){const note=document.getElementById('pixel-note-'+c.number);if(note)c.notes=note.value;}}
 function sync(){captureNotes();embedded.textContent=safeJson(state);}
-function changed(){sync();globalStatus.textContent='Unsaved labels — save the marked review or export the labeled dataset.';}
+function changed(){globalStatus.textContent='Unsaved changes. Download boxes for GitHub or save the marked review to keep editing later.';}
 function snapshot(card){return {annotations:deep(card.annotations),complete_corners:[...card.complete_corners]};}
 function remember(editor){editor.history.push(snapshot(editor.card));if(editor.history.length>100)editor.history.shift();}
 function relatedCards(card){
@@ -71,7 +71,7 @@ function refresh(editor){
  tools.canvas.width=size;tools.canvas.height=size;tools.canvas.style.width=(size*zoom)+'px';tools.canvas.style.height=(size*zoom)+'px';
  tools.group.value=card.group_id;tools.split.value=card.split;
  tools.group.disabled=groupLocked(card);tools.split.disabled=groupLocked(card);
- tools.status.textContent=(card.split==='validation'?'Reserved validation':'Development')+' · '+card.annotations.length+' labels · '+card.complete_corners.length+'/4 fully reviewed corners'+(card.previously_reviewed?' · Previously reviewed: development only.':'')+(card.result.analysis_mode!=='whitening_classification'?' · Marking is available, but tuning needs a run made with edge_classifier.':'');
+ tools.status.textContent=(card.split==='validation'?'Reserved validation':'Development')+' · '+card.annotations.length+' marks'+(card.previously_reviewed?' · Previously reviewed: development only.':'')+(card.result.analysis_mode!=='whitening_classification'?' · Marking is available, but tuning needs a run made with edge_classifier.':'');
  tools.marks.replaceChildren();
  for(const a of card.annotations.filter(a=>a.corner===tools.corner.value)){
   const li=document.createElement('li');li.textContent=a.label.replace('_',' ')+(a.candidate_id!==undefined?' — candidate '+a.candidate_id:' — drawn region');
@@ -89,7 +89,7 @@ function validate(payload){
   if(!orig||seen.has(c.number)||c.listing!==orig.listing||c.source_sha256!==orig.source_sha256)throw Error('The imported labels belong to different photos or duplicate cards.');
   seen.add(c.number);
   if(typeof c.group_id!=='string'||!c.group_id.trim()||c.group_id.length>200||!['development','validation'].includes(c.split))throw Error('Invalid card group or dataset split.');
-  if(orig.previously_reviewed&&c.split!=='development')throw Error('Previously reviewed cards must remain development cards.');
+  if((orig.previously_reviewed||c.previously_reviewed)&&c.split!=='development')throw Error('Previously reviewed cards must remain development cards.');
   const current=state.cards.find(x=>x.number===c.number);
   if(current.previously_reviewed&&c.split!=='development')throw Error('Retired validation cards must remain development cards.');
   if(groupLocked(current)&&(c.split!==current.split||c.group_id!==current.group_id))throw Error('A reviewed card cannot be reassigned through import. Use the retire button to move reserved cards to development.');
@@ -106,23 +106,24 @@ function validate(payload){
    if(a.candidate_id!==undefined){if(!candidates(orig,a.corner).some(x=>x.id===a.candidate_id))throw Error('Unknown candidate ID.');clean.candidate_id=a.candidate_id;}
    return clean;
   });
-  return {...deep(orig),group_id:c.group_id,split:c.split,notes:c.notes,complete_corners:[...c.complete_corners],annotations,split_locked:Boolean(c.split_locked||hasLabels(c))};
+  return {...deep(orig),group_id:c.group_id,split:c.split,notes:c.notes,complete_corners:[...c.complete_corners],annotations,previously_reviewed:Boolean(orig.previously_reviewed||current.previously_reviewed||c.previously_reviewed),split_locked:Boolean(groupLocked(current)||c.split_locked||hasLabels(c))};
  });
- return {schema,cards:validated};
+ return {schema,cards:validated,batch_key:initial.batch_key};
 }
 function download(content,type,name){const url=URL.createObjectURL(new Blob([content],{type}));const a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);globalStatus.textContent='Download requested. Keep the downloaded file before closing.';}
 async function exportData(){
  sync();const exported=deep(state);
  for(const c of exported.cards)c.positive_only_review=Boolean(c.annotations.length||c.notes.trim());
+ const fileStem='pixel-whitening-labels'+(initial.batch_key?'-'+initial.batch_key:'');
  const text=JSON.stringify({...exported,exported_at:new Date().toISOString()});
  try{
   if(typeof CompressionStream!=='undefined'){
    const stream=new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'));
    const packed=await new Response(stream).arrayBuffer();
-   download(packed,'application/gzip','pixel-whitening-labels.json.gz');return;
+   download(packed,'application/gzip',fileStem+'.json.gz');return;
   }
  }catch(error){globalStatus.textContent='Compression unavailable; exporting ordinary JSON.';}
- download(text,'application/json','pixel-whitening-labels.json');
+ download(text,'application/json',fileStem+'.json');
 }
 function saveHtml(){
  sync();const copy=document.documentElement.cloneNode(true);
@@ -133,6 +134,7 @@ function saveHtml(){
 }
 // Validate embedded saved state too. Result snapshots remain the original report's data.
 state=validate(state);
+if(initial.auto_reserve)reserveGroups();
 for(const card of state.cards){
  const element=document.getElementById('pixel-editor-'+card.number);if(!element)continue;
  const tools={};element.querySelectorAll('[data-tool]').forEach(e=>tools[e.dataset.tool]=e);
@@ -156,7 +158,10 @@ for(const card of state.cards){
   const hit=tools['show-candidates'].checked?candidatesAt(card,tools.corner.value,b.x,b.y)[0]:null;
   if(hit)addMark(editor,hit.box,hit.id);else draw(editor);
  });
- const note=document.getElementById('pixel-note-'+card.number);if(note){note.value=card.notes;note.addEventListener('input',()=>{lockGroup(card);changed();refreshAll();});}
+ const note=document.getElementById('pixel-note-'+card.number);if(note){note.value=card.notes;note.addEventListener('input',()=>{
+  const linked=relatedCards(card);card.notes=note.value;lockGroup(card);changed();
+  for(const c of linked){const e=editors.get(c.number);if(e){e.tools.group.disabled=true;e.tools.split.disabled=true;}}
+ });}
  refresh(editor);
 }
 document.getElementById('pixel-label-save').addEventListener('click',saveHtml);
@@ -166,12 +171,16 @@ document.getElementById('pixel-label-retire').addEventListener('click',()=>{
  for(const c of state.cards){if(c.split==='validation'){c.split='development';c.previously_reviewed=true;c.split_locked=true;}}
  changed();refreshAll();
 });
-document.getElementById('pixel-label-reserve').addEventListener('click',()=>{
- captureNotes();const processed=new Set();let reserved=0,eligible=0;
+function reserveGroups(){
+ const processed=new Set();let reserved=0,eligible=0;
  for(const c of state.cards){if(processed.has(c.number))continue;const group=relatedCards(c);group.forEach(x=>processed.add(x.number));if(groupLocked(c))continue;
   const key=group.map(x=>x.group_id).sort()[0];const split=groupHash(key)%10<3?'validation':'development';
   for(const x of group)x.split=split;eligible++;if(split==='validation')reserved++;
  }
+ return {reserved,eligible};
+}
+document.getElementById('pixel-label-reserve').addEventListener('click',()=>{
+ captureNotes();const {reserved,eligible}=reserveGroups();
  changed();refreshAll();globalStatus.textContent='Reserved '+reserved+' of '+eligible+' eligible groups. Small batches may differ from 30%. Previously reviewed groups were left alone. Save this assignment before labeling.';
 });
 document.getElementById('pixel-label-import').addEventListener('change',async e=>{

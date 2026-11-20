@@ -45,6 +45,10 @@ def main():
     batch, review = read_document(args.review)
     answers = {c['id']: c.get('human_review', {}) for c in (review or {}).get('cards', [])}
     results, panels = [], []
+    if args.classify_whitening:
+        from edge_classifier import classify
+        from pixel_active_settings import active_thresholds
+        thresholds = active_thresholds()
     cv2.setNumThreads(2)
     for card in batch['cards']:
         source = next((im for im in card['images'] if im['label']=='Corner close-ups'), None)
@@ -58,8 +62,7 @@ def main():
                                   grain_filter=args.grain_filter, edge_filter=args.edge_filter,art_filter=args.art_filter,
                                   classify_whitening=args.classify_whitening)
         if args.classify_whitening:
-            from edge_classifier import classify
-            result['whitening_classification']=classify(result)
+            result['whitening_classification']=classify(result, thresholds)
         if args.surround_threshold is not None:
             result['band_calibration'] = 'Not used; local blue geometry filter replaces boundary filter'
             result['surrounding_blue_settings'] = dict(threshold=args.surround_threshold,

@@ -1,0 +1,68 @@
+name: Improve pixel whitening from boxes
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'review_labels/*.json'
+      - 'review_labels/*.json.gz'
+      # The workflow writes numeric run records. Imported historical records
+      # also start a comparison so the first report uses the correct split.
+      - '!review_labels/validation-exposure-[0-9]*.json'
+      - '!review_labels/frozen-config*.json'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pixel-review-learning
+  cancel-in-progress: false
+
+jobs:
+  compare:
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Include reviews and validation records from earlier queued runs.
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Compare current and proposed settings using saved boxes
+        run: |
+          python pixel_training.py improve --dataset review_labels --out outputs/comparison > "$RUNNER_TEMP/pixel-summary.txt"
+          git rev-parse HEAD > outputs/comparison/source-commit.txt
+      - name: Remember which reserved cards were scored
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if [[ -f outputs/comparison/validation-exposure.json ]]; then
+            record="review_labels/validation-exposure-${GITHUB_RUN_ID}.json"
+            if [[ -e "$record" ]]; then
+              echo "::error::This run already recorded a comparison. Start a new run to evaluate new reviews."
+              exit 1
+            fi
+            cp outputs/comparison/validation-exposure.json "$record"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -- "$record"
+            git commit -m "Record reserved cards used in comparison $GITHUB_RUN_ID"
+            git push origin "HEAD:refs/heads/$DEFAULT_BRANCH"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pixel-improvement-${{ github.run_id }}
+          path: outputs/comparison/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Show the result
+        run: |
+          cat outputs/comparison/REPORT.md >> "$GITHUB_STEP_SUMMARY"
+          if [[ -f outputs/comparison/recommended-settings.json ]]; then
+            echo >> "$GITHUB_STEP_SUMMARY"
+            echo "To apply these settings, open [Use validated pixel settings]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/workflows/use-pixel-settings.yml) and enter comparison run ID **$GITHUB_RUN_ID**." >> "$GITHUB_STEP_SUMMARY"
+          fi

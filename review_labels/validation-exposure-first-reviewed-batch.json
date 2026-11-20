@@ -1,0 +1,17 @@
+{
+  "schema": "pixel-whitening-validation-exposure-v1",
+  "config_sha256": "62b5dfd838da8ffe8b0ad141a579360e41eaaa2ae99a3e6fa731922e3b1a4bf3",
+  "exposed_aliases": [
+    "group:v1|137942934453|0",
+    "group:v1|198806355116|0",
+    "group:v1|880130662793|0",
+    "image:1b9e933c5d5b6009d192e66256f89886cab52b35e4a0e819ba3054eee7958db6",
+    "image:a5d4b476eb67fed3d6ab68fb912603ca4cbcd78cb9a3002de823360f875d9594",
+    "image:dd53018af13fecf4e550c7ac885caaab1933ceb587c36a3056c5610543f4aff4",
+    "listing:137942934453",
+    "listing:198806355116",
+    "listing:880130662793"
+  ],
+  "annotation_fingerprint": "6904293d92f89c89799015ca47cda6a9d92b21068133aea1bee40af004b4864e",
+  "status": "exposed_do_not_reuse_as_fresh_validation"
+}

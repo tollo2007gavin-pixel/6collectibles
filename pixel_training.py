@@ -14,6 +14,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from edge_classifier import DEFAULTS, PATCH_DEFAULTS, VERSION, classify
+from pixel_active_settings import active_thresholds
 
 SCHEMA='pixel-whitening-labels-v1'
 CONFIG_SCHEMA='pixel-whitening-frozen-v1'
@@ -135,7 +136,7 @@ def validate_cards(cards):
         if c.get('positive_only_review'):
             if not marks and not str(c.get('notes','')).strip():
                 raise ValueError('Positive-only review requires marks or a note; untouched cards remain unreviewed')
-            for region in prediction_regions(r,DEFAULTS):
+            for region in reviewed_candidate_boxes(r):
                 if any(matches(region,a) or (a.get('candidate_id')==region['id'] and a['corner']==region['corner']) for a in marks):continue
                 identifier='automatic-negative-'+str(region['id'])
                 if identifier in mark_ids:raise ValueError('Automatic annotation ID conflicts with a manual mark')
@@ -169,7 +170,7 @@ def validate_cards(cards):
     return normalized
 
 
-def load_dataset(path):
+def load_dataset(path, exposures=()):
     path=Path(path);files=sorted([*path.glob('*.json'),*path.glob('*.json.gz')]) if path.is_dir() else [path]
     cards=[]
     for file in files:
@@ -178,6 +179,8 @@ def load_dataset(path):
         if data.get('schema') in (CONFIG_SCHEMA,EXPOSURE_SCHEMA):continue
         if data.get('schema')!=SCHEMA:raise ValueError(f'Not a labeled pixel dataset: {file.name}')
         cards.extend(data.get('cards',[]))
+    if exposures:
+        cards = retire_exposed_groups(cards, exposures)
     return validate_cards(cards)
 
 
@@ -194,15 +197,26 @@ def load_exposures(path):
     return exposures
 
 
+def candidate_box(candidate, decision):
+    patches = candidate.get('shape', {}).get('patch_evidence', {}).get('scales', [])
+    if decision.get('reason') == 'compact_light_patch_supported_at_two_scales' and patches:
+        return max(patches, key=lambda patch: patch['scale'])['box_in_corner']
+    return candidate['box_in_corner']
+
+
+def reviewed_candidate_boxes(result):
+    """Use the exact boxes shown in the editor, even after thresholds change."""
+    decisions = {d['id']:d for d in result['whitening_classification'].get('decisions', [])}
+    for candidate in result['candidates'] + result['excluded_candidates']:
+        identifier = candidate['id']
+        yield dict(id=identifier, corner=candidate['corner'],
+                   box=candidate_box(candidate, decisions.get(identifier, {})))
+
+
 def prediction_regions(result,limits):
     source={c['id']:c for c in result['candidates']+result['excluded_candidates']}
-    decisions=classify(result,limits)['decisions'];regions=[]
-    for d in decisions:
-        c=source[d['id']];box=c['box_in_corner']
-        if d['reason']=='compact_light_patch_supported_at_two_scales':
-            box=max(c['shape']['patch_evidence']['scales'],key=lambda p:p['scale'])['box_in_corner']
-        regions.append(dict(id=d['id'],corner=d['corner'],box=box,classification=d['classification']))
-    return regions
+    return [dict(id=d['id'],corner=d['corner'],box=candidate_box(source[d['id']],d),
+                 classification=d['classification']) for d in classify(result,limits)['decisions']]
 
 
 def score_cards(cards,limits,policy=MATCHING):
@@ -282,34 +296,56 @@ def frozen_config(cards,limits,selection_status):
     return result
 
 
-def proposals():
-    yield 'baseline',dict(DEFAULTS)
-    for name in DEFAULTS:
+def proposals(current):
+    yield 'baseline',dict(current)
+    for name in current:
         for factor in (.8,1.2):
-            values=dict(DEFAULTS);values[name]*=factor
+            values=dict(current);values[name]*=factor
             yield f'{name} x {factor:g}',values
 
 
-def calibrate(cards,tune=True):
+def card_groups(cards):
+    """Join all photos sharing a listing, image hash or physical-card group."""
+    groups = []
+    for card in cards:
+        keys = set(aliases(card))
+        members = [card]
+        separate = []
+        for existing_keys, existing_members in groups:
+            if keys.intersection(existing_keys):
+                keys.update(existing_keys)
+                members.extend(existing_members)
+            else:
+                separate.append((existing_keys, existing_members))
+        groups = separate + [(keys, members)]
+    return groups
+
+
+def enough_review(counts, groups):
+    return (groups >= 3 and counts['positive_regions'] >= 3 and
+            (counts['explicit_negative_regions'] >= 3 or counts['completed_corners'] >= 1))
+
+
+def has_scored_labels(card):
+    return bool(card['complete_corners'] or
+                any(a['label'] in ('whitening','not_whitening') for a in card['annotations']))
+
+
+def calibrate(cards,tune=True,current=None):
     development=[c for c in cards if c['split']=='development']
     if not development:raise ValueError('No development cards; validation answers cannot be used to tune')
-    baseline=score_cards(development,DEFAULTS);counts=baseline['counts']
-    identity_sets=[set(aliases(c)) for c in development if c['annotations'] or c['complete_corners']]
-    while True:
-        pair=next(((i,j) for i,a in enumerate(identity_sets) for j,b in enumerate(identity_sets) if i<j and a.intersection(b)),None)
-        if pair is None:break
-        i,j=pair;identity_sets[i].update(identity_sets.pop(j))
-    groups=len(identity_sets)
-    enough=(groups>=3 and counts['positive_regions']>=3 and
-            (counts['explicit_negative_regions']>=3 or counts['completed_corners']>=1))
-    chosen=dict(DEFAULTS);best=baseline;trials=[];status='baseline_only'
+    if current is None:current=active_thresholds()
+    baseline=score_cards(development,current);counts=baseline['counts']
+    groups=sum(any(has_scored_labels(c) for c in members) for _,members in card_groups(development))
+    enough=enough_review(counts, groups)
+    chosen=dict(current);best=baseline;trials=[];status='baseline_only'
     if tune and enough:
-        for name,limits in proposals():
+        for name,limits in proposals(current):
             score=baseline if name=='baseline' else score_cards(development,limits)
             trials.append(dict(setting=name,thresholds=limits,precision=score['precision'],recall=score['recall'],f1=score['f1']))
             if score['recall']>=baseline['recall'] and score['f1']>best['f1']+1e-12:
                 chosen=limits;best=score
-        status='development_improvement' if chosen!=DEFAULTS else 'no_development_improvement'
+        status='development_improvement' if chosen!=current else 'no_development_improvement'
     elif tune:status='insufficient_labels'
     return dict(mode='tune' if tune else 'baseline',selection_status=status,development_cards=len(development),
         baseline=baseline,selected=best,trials=trials,
@@ -339,6 +375,91 @@ def validate_frozen(cards,config,exposures=()):
     return report,exposure
 
 
+def retire_exposed_groups(cards, exposures):
+    exposed = {key for record in exposures for key in record['exposed_aliases']}
+    if not exposed:
+        return cards
+    retired = []
+    for keys, members in card_groups(cards):
+        for card in members:
+            if card['split'] == 'validation' and exposed.intersection(keys):
+                retired.append(dict(card, split='development'))
+            else:
+                retired.append(card)
+    return retired
+
+
+def improve(cards, exposures=()):
+    """Choose settings on pooled development groups, then score one frozen choice."""
+    cards = retire_exposed_groups(cards, exposures)
+    current = active_thresholds()
+    development = [c for c in cards if c['split'] == 'development']
+    reserved_groups = [members for _, members in card_groups([c for c in cards if c['split'] == 'validation'])
+                       if any(has_scored_labels(c) for c in members)]
+    reserved = [c for members in reserved_groups for c in members]
+    report = dict(mode='improve', active_thresholds=current, decision='need_reviews',
+                  development_cards=len(development), validation_cards=0,
+                  fresh_reviewed_reserved_cards=len(reserved))
+    files = {}
+    if not development:
+        report['message'] = 'Add reviewed development cards to compare settings.'
+        return report, files
+    tuning, frozen = calibrate(development, current=current)
+    report['development'] = tuning
+    files['frozen-config.json'] = frozen
+    if tuning['selection_status'] == 'insufficient_labels':
+        report['message'] = tuning['minimum_for_tuning']
+        return report, files
+    if tuning['selection_status'] != 'development_improvement':
+        report.update(decision='keep_current', message='Keep the current settings. No trial improved the development score while preserving chip recall.')
+        return report, files
+    report['threshold_changes'] = {
+        name: dict(live=current[name], proposed=value)
+        for name, value in frozen['core_thresholds'].items() if value != current[name]
+    }
+    coverage = dict(positive_regions=sum(a['label']=='whitening' for c in reserved for a in c['annotations']),
+                    explicit_negative_regions=sum(a['label']=='not_whitening' for c in reserved for a in c['annotations']),
+                    completed_corners=sum(len(c['complete_corners']) for c in reserved))
+    if not enough_review(coverage, len(reserved_groups)):
+        report.update(decision='need_fresh_cards', message='Review another fresh batch. Reserved cards are saved for a comparison with at least three physical-card groups, three marked chips, and three negative regions or one fully reviewed corner.')
+        return report, files
+    candidate, exposure = validate_frozen(reserved, frozen, exposures)
+    live = score_cards(reserved, current)
+    counts = candidate['counts']
+    gained = counts['true_positive_regions'] - live['counts']['true_positive_regions']
+    added = counts['false_positive_marks'] - live['counts']['false_positive_marks']
+    report.update(validation_cards=len(reserved), live=live, proposed=candidate,
+                  config_sha256=frozen['config_sha256'], chips_found_change=gained, false_alarms_change=added)
+    files['validation-exposure.json'] = exposure
+    if gained >= 0 and added <= 0 and (gained > 0 or added < 0):
+        report.update(decision='recommend_update', message='The proposed settings improved the reserved-card comparison. They caught more chips or reduced false alarms without worsening the other count.')
+        files['recommended-settings.json'] = frozen['core_thresholds']
+    else:
+        report.update(decision='keep_current', message='Keep the current settings. The proposed settings tied, lost chips, or added false alarms on reserved cards.')
+    return report, files
+
+
+def improvement_markdown(report):
+    lines = ['# Pixel whitening review result', '', report['message'], '',
+             f"Used {report['development_cards']} development cards and scored {report['validation_cards']} fresh reserved cards."]
+    tuning = report.get('development')
+    if tuning and tuning['selection_status'] == 'development_improvement':
+        before, after = (tuning[name]['counts'] for name in ('baseline','selected'))
+        lines.extend(['', f"On development cards, live settings found {before['true_positive_regions']} chips with "
+                      f"{before['false_positive_marks']} false alarms. Proposed settings found {after['true_positive_regions']} "
+                      f"chips with {after['false_positive_marks']} false alarms. These cards were used to choose the settings."])
+        for name, change in report['threshold_changes'].items():
+            lines.append(f"\nProposed change for `{name}` from {change['live']:g} to {change['proposed']:g}.")
+    if 'live' in report:
+        lines.extend(['', '| Reserved-card result | Live | Proposed |',
+                      '|---|---:|---:|'])
+        for name, key in [('Chips found', 'true_positive_regions'), ('Chips missed', 'false_negative_regions'),
+                          ('False alarms', 'false_positive_marks'), ('Misses without a matching candidate', 'extraction_missed_regions')]:
+            lines.append(f"| {name} | {report['live']['counts'][key]} | {report['proposed']['counts'][key]} |")
+        lines.extend(['', 'Counts refer to marked chips and alarms in reviewed areas. Each settings choice was scored on the same reserved cards. A small sample can change substantially with a single chip.'])
+    return '\n'.join(lines) + '\n'
+
+
 def markdown(report):
     scores=report.get('selected',report);c=scores['counts']
     fmt=lambda v:'not measurable' if v is None else f'{v:.1%}'
@@ -354,23 +475,32 @@ def markdown(report):
 
 def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action',choices=('baseline','tune','validate'))
+    parser.add_argument('action',choices=('baseline','tune','validate','improve'))
     parser.add_argument('--dataset',required=True);parser.add_argument('--out',required=True)
     parser.add_argument('--config')
     args=parser.parse_args(argv)
     try:
-        cards=load_dataset(args.dataset)
-        if args.action=='validate':
+        exposures=load_exposures(args.dataset) if args.action in ('validate','improve') else []
+        cards=load_dataset(args.dataset, exposures if args.action=='improve' else ())
+        if args.action=='improve':
+            report,files=improve(cards,exposures)
+            summary=improvement_markdown(report)
+        elif args.action=='validate':
             if not args.config:raise ValueError('Provide --config for frozen validation')
             config=json.loads(Path(args.config).read_text(encoding='utf-8-sig'))
-            report,extra=validate_frozen(cards,config,load_exposures(args.dataset));extra_name='validation-exposure.json'
+            report,extra=validate_frozen(cards,config,exposures)
+            files={'validation-exposure.json':extra}
+            summary=markdown(report)
         else:
-            report,extra=calibrate(cards,args.action=='tune');extra_name='frozen-config.json'
+            report,extra=calibrate(cards,args.action=='tune')
+            files={'frozen-config.json':extra}
+            summary=markdown(report)
         output=Path(args.out);output.mkdir(parents=True,exist_ok=False)
         (output/'report.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
-        (output/extra_name).write_text(json.dumps(extra,indent=2),encoding='utf-8')
-        (output/'REPORT.md').write_text(markdown(report),encoding='utf-8')
-        print(markdown(report))
+        for name,value in files.items():
+            (output/name).write_text(json.dumps(value,indent=2),encoding='utf-8')
+        (output/'REPORT.md').write_text(summary,encoding='utf-8')
+        print(summary)
     except (ValueError,KeyError,TypeError,OSError) as exc:parser.error(str(exc))
 
 
