@@ -110,27 +110,32 @@ function validate(payload){
  });
  return {schema,cards:validated,batch_key:initial.batch_key};
 }
-function download(content,type,name){const url=URL.createObjectURL(new Blob([content],{type}));const a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);globalStatus.textContent='Download requested. Keep the downloaded file before closing.';}
+function download(blob,name){const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);}
 async function exportData(){
- sync();const exported=deep(state);
- for(const c of exported.cards)c.positive_only_review=Boolean(c.annotations.length||c.notes.trim());
+ captureNotes();const cards=state.cards.map(c=>({...c,positive_only_review:Boolean(c.annotations.length||c.notes.trim())}));
  const fileStem='pixel-whitening-labels'+(initial.batch_key?'-'+initial.batch_key:'');
- const text=JSON.stringify({...exported,exported_at:new Date().toISOString()});
+ const plain=new Blob([JSON.stringify({...state,cards,exported_at:new Date().toISOString()})],{type:'application/json'});
+ let file=plain,name=fileStem+'.json';
  try{
   if(typeof CompressionStream!=='undefined'){
-   const stream=new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'));
-   const packed=await new Response(stream).arrayBuffer();
-   download(packed,'application/gzip',fileStem+'.json.gz');return;
+   const stream=plain.stream().pipeThrough(new CompressionStream('gzip'));
+   file=await new Response(stream,{headers:{'Content-Type':'application/gzip'}}).blob();
+   name+='.gz';
   }
- }catch(error){globalStatus.textContent='Compression unavailable; exporting ordinary JSON.';}
- download(text,'application/json',fileStem+'.json');
+ }catch(error){/* The loader accepts the same JSON without compression. */}
+ download(file,name);
+ const size=(file.size/1048576).toFixed(2)+' MiB';
+ globalStatus.textContent=file.size>25*1048576
+  ? name+' ('+size+') exceeds the GitHub browser upload limit. '+(file===plain?'Save the local photo backup, open it in Edge or Chrome, and download the boxes again to get a compressed file.':'Keep this boxes file and upload it using Git instead.')
+  :'For GitHub, select '+name+' ('+size+') from Downloads.';
 }
 function saveHtml(){
  sync();const copy=document.documentElement.cloneNode(true);
  for(const c of state.cards){const n=copy.querySelector('#pixel-note-'+c.number);if(n)n.textContent=c.notes;}
  copy.querySelector('#pixel-annotation-state').textContent=safeJson(state);
  copy.querySelector('#pixel-label-status').textContent='Saved markings loaded. Save again after editing.';
- download('<!doctype html>\n'+copy.outerHTML,'text/html;charset=utf-8','reviewed-pixel-markings.html');
+ download(new Blob(['<!doctype html>\n',copy.outerHTML],{type:'text/html;charset=utf-8'}),'reviewed-pixel-markings.html');
+ globalStatus.textContent='Photo backup saved to Downloads. To send your boxes to GitHub, click “1. Download boxes for GitHub” above.';
 }
 // Validate embedded saved state too. Result snapshots remain the original report's data.
 state=validate(state);
